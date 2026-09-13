@@ -94,9 +94,11 @@ resource "cloudflare_account_token" "tokens" {
     }
   ]
   condition = length(each.value.allowed_cidrs) == 0 && length(each.value.denied_cidrs) == 0 ? null : {
+    # An empty list is sent as null, not []: `in = []` would require the caller to
+    # belong to an empty allowed set and make a deny-only token unusable.
     request_ip = {
-      in     = each.value.allowed_cidrs
-      not_in = each.value.denied_cidrs
+      in     = length(each.value.allowed_cidrs) == 0 ? null : each.value.allowed_cidrs
+      not_in = length(each.value.denied_cidrs) == 0 ? null : each.value.denied_cidrs
     }
   }
   not_before = each.value.not_before

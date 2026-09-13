@@ -20,7 +20,11 @@ command, `.tfvars`, backend file, CI log, issue, or pull request.
 1. Inventory zones, records, buckets, lifecycle and lock settings, members, and
    tokens by identifier and purpose. Record no token values.
 2. Fill a gitignored `production.auto.tfvars` from
-   `production.tfvars.example`. Keep resource keys stable and descriptive.
+   `production.tfvars.example`. Keep resource keys stable and descriptive. It is
+   the production inventory every plan depends on: without it OpenTofu prompts
+   for `account_id` and `zone_name`, and the empty resource maps plan removals.
+   Store an encrypted copy in approved private custody alongside the state
+   recovery copy, and refresh it in the same change that edits the file.
 3. Copy `backend.hcl.example` to the gitignored `backend.hcl`, omitting backend
    credentials. Supply those through `AWS_ACCESS_KEY_ID` and
    `AWS_SECRET_ACCESS_KEY`.
@@ -49,7 +53,8 @@ command, `.tfvars`, backend file, CI log, issue, or pull request.
 
 7. Review every create and update. A delete or replacement is a failed
    migration, even when the resource appears obsolete. The only expected
-   creates are the lifecycle rules from step 5 and any new account tokens.
+   creates are the lifecycle rules from step 5, any new account tokens, and the
+   protected state bucket when it was absent from the inventory.
 8. Apply exactly that reviewed plan, still on local state, with a write-scoped
    bootstrap token:
 
@@ -76,7 +81,8 @@ command, `.tfvars`, backend file, CI log, issue, or pull request.
     ```
 
 12. From a fresh operator environment, initialize only from the repository,
-    private custody, and R2 backend. Confirm `tofu plan -detailed-exitcode`
+    private custody, and R2 backend: restore `production.auto.tfvars` from its
+    encrypted custody copy before planning. Confirm `tofu plan -detailed-exitcode`
     returns exit code 0 before enabling apply automation. While one plan holds
     the state lock, confirm a second `tofu plan -lock-timeout=0s` fails to
     acquire it; a second plan that proceeds means locking is not in effect.
@@ -85,7 +91,8 @@ command, `.tfvars`, backend file, CI log, issue, or pull request.
 
 Retrieve short-lived Cloudflare and R2 state credentials from the independent
 custody path, clone this repository on a clean machine, recreate `backend.hcl`,
-and run `tofu init -reconfigure -backend-config=backend.hcl`. A successful
+restore `production.auto.tfvars` from its encrypted custody copy, and run
+`tofu init -reconfigure -backend-config=backend.hcl`. A successful
 state pull and clean plan proves the recovery path without Kubernetes.
 
 If the state bucket itself is unavailable, stop automated applies. Restore or
