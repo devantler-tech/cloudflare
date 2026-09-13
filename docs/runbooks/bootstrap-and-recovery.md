@@ -24,10 +24,15 @@ command, `.tfvars`, backend file, CI log, issue, or pull request.
 3. Copy `backend.hcl.example` to the gitignored `backend.hcl`, omitting backend
    credentials. Supply those through `AWS_ACCESS_KEY_ID` and
    `AWS_SECRET_ACCESS_KEY`.
-4. Before the R2 state bucket is available, initialize with local state:
+4. Before the R2 state bucket is available, select the local backend with a
+   temporary, gitignored override and initialize. `tofu init -backend=false`
+   does not work here: it skips backend initialization, so `tofu import` and
+   `tofu plan` stop with "Backend initialization required" while `versions.tf`
+   declares the S3 backend.
 
    ```sh
-   tofu init -backend=false
+   printf 'terraform {\n  backend "local" {}\n}\n' >backend_override.tf
+   tofu init
    ```
 
 5. Import the zone, DNS records, R2 buckets, and account tokens using the import
@@ -44,15 +49,19 @@ command, `.tfvars`, backend file, CI log, issue, or pull request.
 
 7. Review every create and update. A delete or replacement is a failed
    migration, even when the resource appears obsolete.
-8. Once the state bucket exists and has recovery access, migrate state:
+8. Once the state bucket exists and has recovery access, remove the override and
+   migrate the local state into R2:
 
    ```sh
+   rm backend_override.tf
    tofu init -migrate-state -backend-config=backend.hcl
    ```
 
 9. From a fresh operator environment, initialize only from the repository,
    private custody, and R2 backend. Confirm `tofu plan -detailed-exitcode`
-   returns exit code 0 before enabling apply automation.
+   returns exit code 0 before enabling apply automation. While one plan holds
+   the state lock, confirm a second `tofu plan -lock-timeout=0s` fails to
+   acquire it; a second plan that proceeds means locking is not in effect.
 
 ## Recovery
 
@@ -62,7 +71,8 @@ and run `tofu init -reconfigure -backend-config=backend.hcl`. A successful
 state pull and clean plan proves the recovery path without Kubernetes.
 
 If the state bucket itself is unavailable, stop automated applies. Restore or
-import the protected bucket using a temporary local state and reconcile the
+import the protected bucket using a temporary local state (the
+`backend_override.tf` from step 4 of the first migration) and reconcile the
 remote state object from the independently retained encrypted recovery copy.
 Never create a second authoritative state lineage.
 
