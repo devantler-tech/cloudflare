@@ -48,20 +48,38 @@ command, `.tfvars`, backend file, CI log, issue, or pull request.
    ```
 
 7. Review every create and update. A delete or replacement is a failed
-   migration, even when the resource appears obsolete.
-8. Once the state bucket exists and has recovery access, remove the override and
-   migrate the local state into R2:
+   migration, even when the resource appears obsolete. The only expected
+   creates are the lifecycle rules from step 5 and any new account tokens.
+8. Apply exactly that reviewed plan, still on local state, with a write-scoped
+   bootstrap token:
 
    ```sh
-   rm backend_override.tf
-   tofu init -migrate-state -backend-config=backend.hcl
+   tofu apply migration.tfplan
    ```
 
-9. From a fresh operator environment, initialize only from the repository,
-   private custody, and R2 backend. Confirm `tofu plan -detailed-exitcode`
-   returns exit code 0 before enabling apply automation. While one plan holds
-   the state lock, confirm a second `tofu plan -lock-timeout=0s` fails to
-   acquire it; a second plan that proceeds means locking is not in effect.
+9. Hand every new token value to approved custody without printing or writing
+   it: pipe `tofu output -json account_token_values` straight into the custody
+   system's stdin import, then confirm receipt by reading back each entry's name
+   and version, never its value. A token that exists only in state is not
+   delivered.
+10. Take the first encrypted recovery copy of state before migrating it: pipe
+    `tofu state pull` through encryption to the recovery key and store the
+    ciphertext in approved private custody, outside R2 and this repository.
+    Refresh that copy after every apply, and do not enable apply automation
+    until it refreshes the copy after each successful apply.
+11. Once the state bucket exists and has recovery access, remove the override and
+    migrate the local state into R2:
+
+    ```sh
+    rm backend_override.tf
+    tofu init -migrate-state -backend-config=backend.hcl
+    ```
+
+12. From a fresh operator environment, initialize only from the repository,
+    private custody, and R2 backend. Confirm `tofu plan -detailed-exitcode`
+    returns exit code 0 before enabling apply automation. While one plan holds
+    the state lock, confirm a second `tofu plan -lock-timeout=0s` fails to
+    acquire it; a second plan that proceeds means locking is not in effect.
 
 ## Recovery
 
@@ -73,6 +91,7 @@ state pull and clean plan proves the recovery path without Kubernetes.
 If the state bucket itself is unavailable, stop automated applies. Restore or
 import the protected bucket using a temporary local state (the
 `backend_override.tf` from step 4 of the first migration) and reconcile the
-remote state object from the independently retained encrypted recovery copy.
+remote state object from the encrypted recovery copy that step 10 creates and
+every apply refreshes.
 Never create a second authoritative state lineage.
 
