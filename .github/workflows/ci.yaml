@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false # read-only job; nothing after checkout uses git credentials
+
+      - name: Install OpenTofu
+        uses: opentofu/setup-opentofu@9d84900f3238fab8cd84ce47d658d25dd008be2f # v1
+        with:
+          tofu_version: 1.12.6
+
+      - name: Validate repository
+        run: scripts/test.sh
+
+
+  required-checks:
+    name: CI - Required Checks
+    if: always()
+    runs-on: ubuntu-latest
+    needs: [validate]
+    permissions: {}
+    steps:
+      - name: ✅ Aggregate job checks
+        uses: devantler-tech/actions/aggregate-job-checks@a147ead8b8bc937fbfb1974e3698c7e32f95517d # v13.5.1
+        with:
+          job-results: ${{ needs.validate.result }}

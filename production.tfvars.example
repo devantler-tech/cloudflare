@@ -1,0 +1,8 @@
+account_id = "replace-with-account-id"
+zone_name  = "example.com"
+
+dns_records       = {}
+r2_buckets        = {}
+r2_lifecycle_rules = {}
+account_tokens    = {}
+

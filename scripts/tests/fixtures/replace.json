@@ -1,0 +1,9 @@
+{
+  "format_version": "1.2",
+  "resource_changes": [
+    {
+      "address": "cloudflare_r2_bucket.backups[\"velero\"]",
+      "change": { "actions": ["delete", "create"] }
+    }
+  ]
+}

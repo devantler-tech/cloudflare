@@ -1,0 +1,13 @@
+{
+  "format_version": "1.2",
+  "resource_changes": [
+    {
+      "address": "cloudflare_dns_record.new",
+      "change": { "actions": ["create"] }
+    },
+    {
+      "address": "cloudflare_dns_record.current",
+      "change": { "actions": ["update"] }
+    }
+  ]
+}

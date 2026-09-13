@@ -1,0 +1,10 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfplan.json
+backend.hcl
+*_override.tf
+production.auto.tfvars
+.env
+
