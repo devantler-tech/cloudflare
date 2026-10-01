@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["terraform"],
+  "semanticCommits": "enabled",
+  "automerge": false,
+  "ignoreDeps": ["hashicorp/terraform"],
+  "packageRules": [
+    {
+      "matchDatasources": ["terraform-provider"],
+      "registryUrls": ["https://registry.opentofu.org"],
+      "rangeStrategy": "pin"
+    }
+  ],
+  "lockFileMaintenance": {
+    "enabled": true
+  }
+}

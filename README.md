@@ -39,3 +39,21 @@ scripts/test.sh
 standard `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` variables. Keep all
 three out of shell history and repository files.
 
+## Dependency updates
+
+This repository configures Renovate to propose Cloudflare provider updates
+and maintain the OpenTofu lock file using `registry.opentofu.org`. Provider versions remain exact pins;
+updates require the existing CI and review gates and are never auto-merged.
+Dependabot continues to manage GitHub Actions.
+
+The OpenTofu runtime stays on the reviewed 1.12.x line. Renovate's Terraform
+runtime updates are disabled because they track a different product. Every
+provider proposal must pass `scripts/test.sh`, including the destructive-plan
+guard. Dependency automation has no production credentials or apply path.
+
+Validate changes to these rules with Renovate's repository configuration
+validator on its supported Node 24 runtime:
+
+```sh
+npx --yes --package=renovate@44.125.1 renovate-config-validator --no-global --strict renovate.json
+```
