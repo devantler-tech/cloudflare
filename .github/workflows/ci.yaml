@@ -6,6 +6,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -28,14 +32,94 @@ jobs:
         run: scripts/test.sh
 
 
+  retired-repo-links:
+    name: Retired repository links
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check documentation links
+        id: links
+        uses: devantler-tech/.github/actions/validate-retired-repo-links@bd0035dd8f41fcf1459b878882b8897443f8dc59  # v4.9.4
+        with:
+          enabled: "true"
+
+      - name: Require a complete scan
+        env:
+          VALIDATED: ${{ steps.links.outputs.validated }}
+        run: test "$VALIDATED" = true
+
+      - name: Prepare disposable README defect
+        run: |
+          mkdir -p "$RUNNER_TEMP/retired-links-fixture/.github"
+          cp README.md AGENTS.md "$RUNNER_TEMP/retired-links-fixture/"
+          printf '\n[Retired catalogue](https://github.com/devantler-tech/reusable-workflows)\n' >> "$RUNNER_TEMP/retired-links-fixture/README.md"
+          cp .github/retired-repo-links.json "$RUNNER_TEMP/retired-links-fixture/.github/retired-repo-links.json"
+
+      - name: Reject the retired README link
+        id: retired
+        continue-on-error: true
+        uses: devantler-tech/.github/actions/validate-retired-repo-links@bd0035dd8f41fcf1459b878882b8897443f8dc59  # v4.9.4
+        with:
+          enabled: "true"
+          working-directory: ${{ runner.temp }}/retired-links-fixture
+
+      - name: Reject missing configuration
+        id: missing
+        continue-on-error: true
+        uses: devantler-tech/.github/actions/validate-retired-repo-links@bd0035dd8f41fcf1459b878882b8897443f8dc59  # v4.9.4
+        with:
+          enabled: "true"
+          config-file: .github/missing-retired-repo-links.json
+
+      - name: Verify negative action outcomes
+        if: ${{ always() }}
+        env:
+          CLEAN_VALIDATED: ${{ steps.links.outputs.validated }}
+          RETIRED_OUTCOME: ${{ steps.retired.outcome }}
+          RETIRED_VALIDATED: ${{ steps.retired.outputs.validated }}
+          MISSING_OUTCOME: ${{ steps.missing.outcome }}
+          MISSING_VALIDATED: ${{ steps.missing.outputs.validated }}
+        run: |
+          test "$CLEAN_VALIDATED" = true
+          test "$RETIRED_OUTCOME" = failure
+          test -z "$RETIRED_VALIDATED"
+          test "$MISSING_OUTCOME" = failure
+          test -z "$MISSING_VALIDATED"
+
+      - name: Checkout released validator for diagnostic proof
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: devantler-tech/.github
+          ref: bd0035dd8f41fcf1459b878882b8897443f8dc59  # v4.9.4
+          path: .retired-repo-links-validator
+          persist-credentials: false
+
+      - name: Verify exact failure codes and diagnostics
+        env:
+          GOWORK: "off"
+          GOFLAGS: ""
+          GOTOOLCHAIN: local
+        run: |
+          go -C .retired-repo-links-validator/actions/validate-retired-repo-links build -mod=readonly -trimpath -o "$RUNNER_TEMP/retired-repo-links" .
+          bash scripts/test-retired-repo-links.sh "$RUNNER_TEMP/retired-repo-links"
+
   required-checks:
     name: CI - Required Checks
     if: always()
     runs-on: ubuntu-latest
-    needs: [validate]
+    needs: [validate, retired-repo-links]
     permissions: {}
     steps:
       - name: ✅ Aggregate job checks
         uses: devantler-tech/.github/actions/aggregate-job-checks@4b00bd6698af033dc472b39a7e609173fe38dfb1 # v6.0.6
         with:
-          job-results: ${{ needs.validate.result }}
+          job-results: >-
+            ${{ needs.validate.result }}
+            ${{ needs.retired-repo-links.result }}

@@ -15,6 +15,12 @@ Platform-specific consumers stay in `devantler-tech/platform`: ExternalSecrets,
 external-dns, cert-manager issuers, backup destinations, egress, admission
 policy, and the capabilities granted to tenants.
 
+CI checks links in `README.md` and this file against the repository-owned retired
+catalogue list in `.github/retired-repo-links.json`. The required guard verifies
+clean documentation, rejected retired links, and missing configuration. Run
+`bash scripts/test-retired-repo-links.sh <released-validator-binary>` to repeat
+the clean and disposable failure fixtures locally.
+
 ## Maintenance
 
 - Use OpenTofu 1.12.x and the official Cloudflare provider version pinned in
