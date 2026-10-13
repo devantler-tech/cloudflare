@@ -1,7 +1,7 @@
 # cloudflare
 
 Declarative, cluster-independent ownership of devantler-tech Cloudflare
-infrastructure.
+infrastructure, written in [OpenTofu](https://opentofu.org).
 
 This repository owns resources that must survive a full platform outage or
 must exist before the platform can bootstrap:
@@ -18,26 +18,78 @@ forward within those boundaries without a platform revision update. Changes to
 Cloudflare privileges, shared DNS, storage, or other platform boundaries are
 reviewed here or in `platform`, according to where the resource runs.
 
-## Safety state
+It is configuration for one organization's account, not a reusable module. You
+can read it, check it locally and propose changes without any Cloudflare
+access. You cannot deploy anything with it: applying is a maintainer operation,
+and no apply automation is enabled yet (see [Safety state](#safety-state)).
 
-The configuration is deliberately import-first. No apply automation is enabled
-until the production inventory has been imported and a reviewed plan reports
-zero deletes and zero replacements. CI validates formatting, provider schemas,
-shell safety, and the destructive-plan guard without production credentials.
+## Check the configuration locally
 
-Start with [`docs/runbooks/bootstrap-and-recovery.md`](docs/runbooks/bootstrap-and-recovery.md).
-The ownership decision and dependency boundary are recorded in
-[`docs/adr/0001-cluster-independent-cloudflare-owner.md`](docs/adr/0001-cluster-independent-cloudflare-owner.md).
+This is the first thing to run, and it needs no credentials, no Cloudflare
+account and no state backend.
 
-## Local validation
+You need:
+
+- [OpenTofu](https://opentofu.org/docs/intro/install/) on the 1.12 line
+  (`versions.tf` requires `~> 1.12.0`; CI runs 1.12.6);
+- [ShellCheck](https://github.com/koalaman/shellcheck#installing) and `jq`;
+- a POSIX shell; and
+- network access to `registry.opentofu.org` and to GitHub's release downloads,
+  where OpenTofu fetches the pinned Cloudflare provider on the first run.
+
+From the repository root:
 
 ```sh
 scripts/test.sh
 ```
 
-`CLOUDFLARE_API_TOKEN` is read by the provider. Backend credentials use the
-standard `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` variables. Keep all
-three out of shell history and repository files.
+It lints the shell scripts, runs the destructive-plan guard against its
+fixtures, checks formatting, downloads the provider with the backend switched
+off (`tofu init -backend=false`) and validates the configuration against the
+provider's schema. On success it exits 0, and the output includes these two
+lines:
+
+```text
+PASS: destructive OpenTofu plans fail closed
+Success! The configuration is valid.
+```
+
+The run creates a `.terraform/` directory in the repository, which Git ignores
+and which you can delete, and a few `cloudflare-plan-*.out` files in `/tmp`.
+
+This check never contacts the Cloudflare API and never reads state. It shows
+that the configuration is well-formed and that the guard rejects deletes and
+replacements. It does not show what a plan against the live account would
+change. Do not set `CLOUDFLARE_API_TOKEN` or backend credentials to run it.
+
+[CI](.github/workflows/ci.yaml) runs the same script on every pull request
+and on every push to `main`, on a GitHub-hosted runner with no production credentials.
+
+## Contributing
+
+[CONTRIBUTING.md](CONTRIBUTING.md) walks through a first documentation change,
+the local checks, and what a pull request needs before it can merge.
+
+## Safety state
+
+The configuration is deliberately import-first. No apply automation is enabled
+until the production inventory has been imported and a reviewed plan reports
+zero deletes and zero replacements.
+
+The ownership decision and dependency boundary are recorded in
+[`docs/adr/0001-cluster-independent-cloudflare-owner.md`](docs/adr/0001-cluster-independent-cloudflare-owner.md).
+
+## Operating the live resources (maintainers)
+
+Inventory, import, plan against the account, state handling, apply and
+recovery are privileged procedures. They need short-lived Cloudflare and state
+credentials from the maintainers' private custody and are not part of local
+setup or of a first contribution. They are described in
+[`docs/runbooks/bootstrap-and-recovery.md`](docs/runbooks/bootstrap-and-recovery.md).
+
+In those procedures the provider reads `CLOUDFLARE_API_TOKEN`, and the state
+backend reads the standard `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+variables. Keep all three out of shell history and repository files.
 
 ## Dependency updates
 
