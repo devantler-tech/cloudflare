@@ -34,8 +34,8 @@ You need:
   (`versions.tf` requires `~> 1.12.0`; CI runs 1.12.6);
 - [ShellCheck](https://github.com/koalaman/shellcheck#installing) and `jq`;
 - a POSIX shell; and
-- network access to `registry.opentofu.org`, to download the pinned Cloudflare
-  provider on the first run.
+- network access to `registry.opentofu.org` and to GitHub's release downloads,
+  where OpenTofu fetches the pinned Cloudflare provider on the first run.
 
 From the repository root:
 
@@ -62,8 +62,8 @@ that the configuration is well-formed and that the guard rejects deletes and
 replacements. It does not show what a plan against the live account would
 change. Do not set `CLOUDFLARE_API_TOKEN` or backend credentials to run it.
 
-[CI](.github/workflows/ci.yaml) runs the same script on every pull request,
-on a GitHub-hosted runner with no production credentials.
+[CI](.github/workflows/ci.yaml) runs the same script on every pull request
+and on every push to `main`, on a GitHub-hosted runner with no production credentials.
 
 ## Contributing
 

@@ -15,8 +15,9 @@ credentials or access to the maintainers' infrastructure.
 ## Make a first documentation change
 
 You need Git, [OpenTofu](https://opentofu.org/docs/intro/install/) on the 1.12
-line, [ShellCheck](https://github.com/koalaman/shellcheck#installing), `jq`,
-and network access to `registry.opentofu.org`. There are no submodules.
+line, [ShellCheck](https://github.com/koalaman/shellcheck#installing), `jq`, a
+POSIX shell, and network access to `registry.opentofu.org` and to GitHub's
+release downloads. There are no submodules.
 
 Fork `devantler-tech/cloudflare` on GitHub. Replace `YOUR-LOGIN` with your
 login:
@@ -43,8 +44,9 @@ the script covers, what it leaves behind and what it does not prove.
 
 [CI](.github/workflows/ci.yaml) runs the same script. It also scans
 `README.md` and `AGENTS.md` for links to retired repositories and checks that
-scan against failing fixtures. You do not need to run that part locally;
-`AGENTS.md` describes how to repeat it if it fails on your pull request.
+scan against failing fixtures. You do not need to run that part locally.
+Repeating it needs Go and a build of the released validator; `AGENTS.md`
+describes how.
 
 ## Changing the configuration
 
@@ -56,9 +58,11 @@ short:
 - Never commit credentials, tokens, state, plan files, `backend.hcl` or
   `production.auto.tfvars`. The two `*.example` files show the expected shape
   with placeholder values only.
-- A change to `scripts/assert-no-destructive-plan.sh` needs a fixture under
-  `scripts/tests/fixtures/` and a case in
-  `scripts/tests/test-no-destructive-plan.sh` that fails without it.
+
+This guide adds one expectation of its own: a change to
+`scripts/assert-no-destructive-plan.sh` comes with a fixture under
+`scripts/tests/fixtures/` and a case in
+`scripts/tests/test-no-destructive-plan.sh` that fails without the change.
 
 A pull request can only be checked for form and schema here. What it would
 change in the live account is decided by a plan that a maintainer runs and
@@ -76,8 +80,9 @@ not run them to validate a pull request, and do not export
 
 ## Submit your change
 
-Review the diff, configure commit signing and stage only the paths you
-changed. Use a [Conventional Commits](https://www.conventionalcommits.org)
+Review the diff,
+[configure commit signing](https://docs.github.com/en/authentication/managing-commit-signature-verification/signing-commits)
+and stage only the paths you changed. Use a [Conventional Commits](https://www.conventionalcommits.org)
 subject that describes the outcome. For the README-only change above:
 
 ```sh
