@@ -10,3 +10,11 @@ updates:
       # devantler-tech actions/workflows are our own code — bump now, no cooldown.
       exclude:
         - "devantler-tech/*"
+  - package-ecosystem: opentofu
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    cooldown:
+      # Third-party provider releases wait a week, as third-party actions do.
+      default-days: 7
