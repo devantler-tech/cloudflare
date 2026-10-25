@@ -6,6 +6,18 @@ writes credentials or state into this repository.
 
 ## Prerequisites
 
+The manual **Cloudflare connection (read-only)** workflow can check the existing
+`CLOUDFLARE_API_TOKEN` CI binding before another credential handoff is requested.
+Run it from `main` with confirmation `VERIFY_READ_ONLY`. Its guard runs before
+checkout and credential use; it makes only fixed GET requests for the owned zone
+and active account token, and prints capability verdicts without account data.
+Missing or unverifiable access fails the check. Verified read access does not
+establish state custody, import coverage or write permissions.
+The workflow never imports, plans, applies or changes provider resources.
+
+This follows GitHub's [manual workflow controls](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+and [environment-variable input handling](https://docs.github.com/en/actions/reference/security/secure-use#use-an-intermediate-environment-variable).
+
 - OpenTofu 1.12.x and `jq`.
 - A short-lived Cloudflare bootstrap token with only the permissions needed to
   read and import the inventoried resources.
