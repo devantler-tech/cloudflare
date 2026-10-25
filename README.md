@@ -96,9 +96,11 @@ variables. Keep all three out of shell history and repository files.
 Dependabot proposes updates to the Cloudflare provider and to the GitHub
 Actions this repository uses, as configured in `.github/dependabot.yml`. For
 the provider it uses its OpenTofu support, which also refreshes the provider
-checksums in `.terraform.lock.hcl`. Provider versions remain exact pins, and a
-new third-party release waits seven days before it is proposed. Updates
-require the existing CI and review gates and are never auto-merged.
+checksums in `.terraform.lock.hcl`. Provider versions remain exact pins. A new
+third-party release waits seven days before Dependabot proposes it as a version
+update; the wait does not apply to Dependabot security updates, which GitHub
+offers for the Actions but not for OpenTofu providers. Updates require the
+existing CI and review gates and are never auto-merged.
 
 The OpenTofu runtime stays on the reviewed 1.12.x line; no updater changes it.
 Every provider proposal must pass `scripts/test.sh`, including the
