@@ -18,7 +18,7 @@ The workflow never imports, plans, applies or changes provider resources.
 This follows GitHub's [manual workflow controls](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
 and [environment-variable input handling](https://docs.github.com/en/actions/reference/security/secure-use#use-an-intermediate-environment-variable).
 
-- OpenTofu 1.12.x and `jq`.
+- OpenTofu 1.12.x, `jq`, and `age` (to decrypt and check the DNS snapshot).
 - A short-lived Cloudflare bootstrap token with only the permissions needed to
   read and import the inventoried resources.
 - Separate R2 S3 credentials scoped only to the state bucket and state object.
@@ -26,6 +26,37 @@ and [environment-variable input handling](https://docs.github.com/en/actions/ref
 
 Export secrets through the operator's secure session. Do not place values in a
 command, `.tfvars`, backend file, CI log, issue, or pull request.
+
+## Encrypted DNS inventory
+
+The **DNS snapshot (encrypted, read-only)** workflow is disabled until a manual
+dispatch by the maintainer on `main` with `EXPORT_ENCRYPTED_DNS`. Before its
+first real dispatch, obtain explicit approval for the transport: this is a
+public repository, so its short-lived Actions artifact is downloadable by
+other signed-in GitHub users. Only authenticated age ciphertext is uploaded;
+the matching dedicated private identity stays in private operator custody.
+The public recipient is reviewed in `.github/dns-recovery-recipient.txt`.
+Never dispatch unless that identity is recoverable and the destination is
+approved. The workflow rejects reruns; a fresh snapshot needs a fresh dispatch.
+
+This makes only fixed GET requests for the owned zone and its DNS records.
+It verifies pagination counts, zone membership and record IDs, and preserves
+all returned record fields. Missing access, partial pages, changing counts,
+duplicates or invalid responses fail without an export. Pagination cannot
+lock live DNS: retain a quiet change window and compare again before import.
+This is a DNS snapshot, not a full account inventory or independent state.
+
+Download the single `dns-snapshot.json.age` from the completed run into the
+approved private recovery folder. Decrypt privately with the dedicated
+identity, check the source revision, owned-zone binding and complete records,
+then confirm the encrypted recovery copy is readable before deleting the
+Actions artifact. Retention is capped at one day; it is transport, never the
+recovery store. Do not print plaintext, account details or identity material.
+Temporary local custody requires a verified transfer to permanent independent
+custody before cleanup; do not delete the only recoverable copy.
+
+Existing import, state, no-destroy plan and first-apply approval requirements
+below remain in effect. A completed snapshot does not enable an apply.
 
 ## First migration
 
