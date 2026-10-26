@@ -15,7 +15,19 @@ Missing or unverifiable access fails the check. Verified read access does not
 establish state custody, import coverage or write permissions.
 The workflow never imports, plans, applies or changes provider resources.
 
-### Encrypted DNS inventory
+This follows GitHub's [manual workflow controls](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
+and [environment-variable input handling](https://docs.github.com/en/actions/reference/security/secure-use#use-an-intermediate-environment-variable).
+
+- OpenTofu 1.12.x, `jq`, and `age` (to decrypt and check the DNS snapshot).
+- A short-lived Cloudflare bootstrap token with only the permissions needed to
+  read and import the inventoried resources.
+- Separate R2 S3 credentials scoped only to the state bucket and state object.
+- An approved private custody destination reachable during a platform outage.
+
+Export secrets through the operator's secure session. Do not place values in a
+command, `.tfvars`, backend file, CI log, issue, or pull request.
+
+## Encrypted DNS inventory
 
 The **DNS snapshot (encrypted, read-only)** workflow is disabled until a manual
 dispatch by the maintainer on `main` with `EXPORT_ENCRYPTED_DNS`. Before its
@@ -45,18 +57,6 @@ custody before cleanup; do not delete the only recoverable copy.
 
 Existing import, state, no-destroy plan and first-apply approval requirements
 below remain in effect. A completed snapshot does not enable an apply.
-
-This follows GitHub's [manual workflow controls](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow)
-and [environment-variable input handling](https://docs.github.com/en/actions/reference/security/secure-use#use-an-intermediate-environment-variable).
-
-- OpenTofu 1.12.x and `jq`.
-- A short-lived Cloudflare bootstrap token with only the permissions needed to
-  read and import the inventoried resources.
-- Separate R2 S3 credentials scoped only to the state bucket and state object.
-- An approved private custody destination reachable during a platform outage.
-
-Export secrets through the operator's secure session. Do not place values in a
-command, `.tfvars`, backend file, CI log, issue, or pull request.
 
 ## First migration
 
