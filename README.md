@@ -32,7 +32,9 @@ You need:
 
 - [OpenTofu](https://opentofu.org/docs/intro/install/) on the 1.12 line
   (`versions.tf` requires `~> 1.12.0`; CI runs 1.12.6);
-- [ShellCheck](https://github.com/koalaman/shellcheck#installing) and `jq`;
+- [ShellCheck](https://github.com/koalaman/shellcheck#installing), `jq`, and
+  [age](https://github.com/FiloSottile/age) (`age` and `age-keygen` on `PATH`;
+  CI verifies the pinned 1.3.2 release archive before using it);
 - a POSIX shell; and
 - network access to `registry.opentofu.org` and to GitHub's release downloads,
   where OpenTofu fetches the pinned Cloudflare provider on the first run.
