@@ -22,7 +22,8 @@ and [environment-variable input handling](https://docs.github.com/en/actions/ref
 - A short-lived Cloudflare bootstrap token with only the permissions needed to
   read and import the inventoried resources.
 - Separate R2 S3 credentials scoped only to the state bucket and state object.
-- An approved private custody destination reachable during a platform outage.
+- Private operator working custody and approved ciphertext recovery custody
+  reachable during a platform outage; see Repository recovery custody below.
 
 Export secrets through the operator's secure session. Do not place values in a
 command, `.tfvars`, backend file, CI log, issue, or pull request.
@@ -34,7 +35,7 @@ dispatch by the maintainer on `main` with `EXPORT_ENCRYPTED_DNS`. Before its
 first real dispatch, obtain explicit approval for the transport: this is a
 public repository, so its short-lived Actions artifact is downloadable by
 other signed-in GitHub users. Only authenticated age ciphertext is uploaded;
-the matching dedicated private identity stays in private operator custody.
+the matching infrastructure private identity stays in independent Keychain custody.
 The public recipient is reviewed in `.github/dns-recovery-recipient.txt`.
 Never dispatch unless that identity is recoverable and the destination is
 approved. The workflow rejects reruns; a fresh snapshot needs a fresh dispatch.
@@ -47,7 +48,7 @@ lock live DNS: retain a quiet change window and compare again before import.
 This is a DNS snapshot, not a full account inventory or independent state.
 
 Download the single `dns-snapshot.json.age` from the completed run into the
-approved private recovery folder. Decrypt privately with the dedicated
+approved private recovery folder. Decrypt privately with the infrastructure
 identity, check the source revision, owned-zone binding and complete records,
 then confirm the encrypted recovery copy is readable before deleting the
 Actions artifact. Retention is capped at one day; it is transport, never the
@@ -66,8 +67,9 @@ below remain in effect. A completed snapshot does not enable an apply.
    `production.tfvars.example`. Keep resource keys stable and descriptive. It is
    the production inventory every plan depends on: without it OpenTofu prompts
    for `account_id` and `zone_name`, and the empty resource maps plan removals.
-   Store an encrypted copy in approved private custody alongside the state
-   recovery copy, and refresh it in the same change that edits the file.
+   Keep its reviewed desired configuration encrypted with this repository's
+   owner, alongside the state recovery copy, and refresh it in the same change.
+   Never commit the plaintext file or replace a complete inventory with empty maps.
 3. Copy `backend.hcl.example` to the gitignored `backend.hcl`, omitting backend
    credentials. Supply those through `AWS_ACCESS_KEY_ID` and
    `AWS_SECRET_ACCESS_KEY`.
@@ -112,7 +114,9 @@ below remain in effect. A completed snapshot does not enable an apply.
    delivered.
 10. Take the first encrypted recovery copy of state before migrating it: pipe
     `tofu state pull` through encryption to the recovery key and store the
-    ciphertext in approved private custody, outside R2 and this repository.
+    authenticated ciphertext with this repository's owner, independently of R2.
+    Its reviewed package format must bind source revision, lineage and serial;
+    the current historical DNS package is not a state backup.
     Refresh that copy after every apply, and do not enable apply automation
     until it refreshes the copy after each successful apply.
 11. Once the state bucket exists and has recovery access, remove the override and
@@ -145,3 +149,49 @@ remote state object from the encrypted recovery copy that step 10 creates and
 every apply refreshes.
 Never create a second authoritative state lineage.
 
+
+## Repository recovery custody
+
+The maintainer approved retaining essential encrypted recovery data in its
+owning repository on 29 October 2026. Ordinary service keys remain in OpenBao;
+the infrastructure recovery key remains independently available in iCloud
+Keychain. Neither the live state backend nor its sole recovery key may depend
+on a functioning cluster or its OpenBao instance.
+
+`recovery/dns-snapshot.json.age` retains the approved pre-migration export from
+run 40282002745. `recovery/manifest.json` binds its original capture time and
+source revision, the export run, current public recovery recipient and ciphertext
+digest. It is historical DNS inventory, not a current plan or OpenTofu state.
+It does not establish that this repository has imported or manages live resources.
+
+The retained payload was authenticated with its original identity, re-encrypted
+directly to the existing infrastructure recipient, then decrypted and compared
+byte-for-byte. The old snapshot identity cannot decrypt this new copy. New
+exports use the same public infrastructure recipient, so another wrapped private
+key is unnecessary. Preserve the temporary source copies until the protected
+merge and a fresh repository checkout's authenticated recovery are verified.
+
+Run `bash scripts/check-recovery-package.sh .` before using the package. CI
+checks the exact file inventory, metadata shape, recipient binding, age header
+and ciphertext digest. Its `CHECKED` result does not claim decryption or provider
+recovery. Actual recovery must use the independently held identity through an
+approved secure identity input and verify authenticated decryption. Keep any
+operator scratch private and temporary; never put key values into shell commands,
+history, logs or this repository. This change does not implement automatic CLI
+access to synchronized Keychain items.
+
+Reviewed desired configuration belongs here. Cloudflare's API can provide a
+current inventory for comparison and import, so there is no need for a second
+manually maintained configuration catalogue. It cannot recover a record that
+has already been deleted, and token metadata cannot recover a token's one-time
+secret value. OpenTofu state also retains the binding between each remote object
+and its stable configuration address. See the [Cloudflare import guidance](https://developers.cloudflare.com/terraform/advanced-topics/import-cloudflare-resources/),
+[token documentation](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+and [OpenTofu state purpose](https://opentofu.org/docs/language/state/).
+
+Active state still belongs in the independently accessible locked R2 backend.
+Its minimum authenticated encrypted recovery copy belongs with this owner,
+including source revision, lineage and serial bindings. That state format,
+publication path, actual lock-contention test and clean-environment recovery
+remain part of the first migration; the current package validator admits only
+the historical DNS package. No apply automation is enabled by this custody change.
