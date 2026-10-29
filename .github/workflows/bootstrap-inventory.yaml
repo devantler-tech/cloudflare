@@ -1,0 +1,64 @@
+name: Bootstrap inventory (encrypted, read-only)
+
+"on":
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type EXPORT_BOOTSTRAP_INVENTORY to read and encrypt the current provider observations
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: encrypted-bootstrap-inventory
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Require the approved operator, main and explicit inventory
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_REPOSITORY" != devantler-tech/cloudflare ] || [ "$GITHUB_ACTOR" != devantler ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$CONFIRMATION" != EXPORT_BOOTSTRAP_INVENTORY ]; then
+            echo 'BOOTSTRAP_INVENTORY=UNVERIFIED' >&2
+            exit 2
+          fi
+
+      - name: Check out the confirmed revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Install the pinned encryption tool
+        run: |
+          curl --disable --fail --silent --show-error --proto '=https' --location --max-redirs 3 --connect-timeout 10 --max-time 60 --output "$RUNNER_TEMP/age.tar.gz" https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz
+          printf '%s  %s\n' cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10 "$RUNNER_TEMP/age.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/age.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
+
+      - name: Read and encrypt the bounded provider observations
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RECIPIENT_FILE: .github/dns-recovery-recipient.txt
+          OUTPUT_DIR: ${{ runner.temp }}/bootstrap-inventory
+        run: bash scripts/export-bootstrap-inventory.sh
+
+      - name: Export only the two encrypted observations
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: encrypted-bootstrap-inventory
+          path: |
+            ${{ runner.temp }}/bootstrap-inventory/dns-snapshot.json.age
+            ${{ runner.temp }}/bootstrap-inventory/bootstrap-inventory.json.age
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
