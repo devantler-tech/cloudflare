@@ -59,6 +59,43 @@ custody before cleanup; do not delete the only recoverable copy.
 Existing import, state, no-destroy plan and first-apply approval requirements
 below remain in effect. A completed snapshot does not enable an apply.
 
+## Current bootstrap observations
+
+The manual **Bootstrap inventory (encrypted, read-only)** workflow accepts only
+`EXPORT_BOOTSTRAP_INVENTORY`, the approved operator, reviewed `main`, and a first
+attempt. It uses the existing repository credential; it never changes permissions
+or provider resources. Invalid dispatches stop before the credential-bearing step.
+
+The one-day artifact contains exactly two age-encrypted observations: the complete
+owned-zone DNS result and the source-bound account metadata, visible token rows,
+current token policy, and bucket metadata/lifecycle rules from the commercial
+`default`, `eu`, and `us` jurisdictions. Each returned result set must have complete,
+consistent pagination and unique identities. Bucket inventory is capped at 100
+per jurisdiction and token inventory at 1,000 visible rows. A denied or ambiguous
+read refuses the whole export. No object contents or token secret values are read.
+
+`ENCRYPTED_READS` proves only that these scoped reads and encryption succeeded.
+Cloudflare may limit a token list to tokens created by the caller; the package
+therefore labels token coverage `credential-visible-only`. It proves neither
+account-wide token coverage nor write permissions. Government jurisdictions are
+outside this observation. Provider reads are not an atomic snapshot: rebind live
+facts immediately before import and plan. Migration readiness remains
+`UNVERIFIED` until ownership, selected imports, state custody and the actual plan
+are reviewed. Do not retain this transient inventory as a second permanent
+configuration backup.
+
+Before selecting imports, compare the current platform declarations and live
+writers. Leave ExternalDNS-managed records and their paired TXT registry under
+ExternalDNS; preserve certificate challenge ownership and static challenge
+delegations. Import every existing resource in the explicitly selected adoption
+set before any apply; do not import every record or account token merely because
+it appeared in a provider list. Bucket objects and application prefixes remain
+owned by their existing consumers.
+
+API contracts: [account token listing](https://developers.cloudflare.com/api/resources/accounts/subresources/tokens/methods/list/),
+[bucket listing](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/list/),
+and [bucket lifecycle reads](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/subresources/lifecycle/methods/get/).
+
 ## First migration
 
 1. Inventory zones, records, buckets, lifecycle and lock settings, members, and
