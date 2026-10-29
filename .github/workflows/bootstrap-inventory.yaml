@@ -45,7 +45,7 @@ jobs:
       - name: Read and encrypt the bounded provider observations
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_BOOTSTRAP_READ_TOKEN }}
           RECIPIENT_FILE: .github/dns-recovery-recipient.txt
           OUTPUT_DIR: ${{ runner.temp }}/bootstrap-inventory
         run: bash scripts/export-bootstrap-inventory.sh

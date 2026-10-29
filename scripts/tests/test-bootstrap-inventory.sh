@@ -76,7 +76,7 @@ chmod +x "$scratch/bin/curl"
 
 # Exercise encrypted output and closed failures without real provider access.
 run_case() {
-  local scenario=$1 expected=$2 rc=0 ref=refs/heads/main actor=devantler attempt=1 confirmation=EXPORT_BOOTSTRAP_INVENTORY
+  local scenario=$1 expected=$2 rc=0 ref=refs/heads/main actor=devantler attempt=1 confirmation=EXPORT_BOOTSTRAP_INVENTORY credential=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
   local case_dir="$scratch/$scenario"
   mkdir "$case_dir"
   cp "$scratch/recipient" "$case_dir/recipient"
@@ -88,11 +88,13 @@ run_case() {
     disabled) confirmation='' ;;
     extra-recipient) printf 'unterminated' >> "$case_dir/recipient" ;;
     existing-output) mkdir "$case_dir/out" ;;
+    absent-token) credential='' ;;
+    invalid-token) credential=$'AAAAAAAAAAAAAAAAAAAA\nheader="injected"' ;;
   esac
   env PATH="$scratch/bin:$PATH" FIXTURE_DIR="$case_dir" FIXTURE_CASE="$scenario" FIXTURE_AGE="$actual_age" \
     GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REPOSITORY=devantler-tech/cloudflare GITHUB_ACTOR="$actor" GITHUB_REF="$ref" \
     GITHUB_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa GITHUB_RUN_ATTEMPT="$attempt" CONFIRMATION="$confirmation" \
-    CLOUDFLARE_API_TOKEN=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA \
+    CLOUDFLARE_API_TOKEN="$credential" \
     RECIPIENT_FILE="$case_dir/recipient" OUTPUT_DIR="$case_dir/out" \
     bash "$repo_root/scripts/export-bootstrap-inventory.sh" > "$case_dir/log" 2>&1 || rc=$?
   [[ $rc == "$expected" ]] || { printf 'FAIL %s: exit %s\n' "$scenario" "$rc"; exit 1; }
@@ -112,12 +114,12 @@ run_case() {
     [[ ! -e "$case_dir/out" || $scenario == existing-output ]]
   fi
   case "$scenario" in
-    wrong-ref|wrong-actor|rerun|disabled|extra-recipient|existing-output) [[ ! -s "$case_dir/calls" ]] ;;
+    wrong-ref|wrong-actor|rerun|disabled|extra-recipient|existing-output|absent-token|invalid-token) [[ ! -s "$case_dir/calls" ]] ;;
   esac
 }
 run_case valid 0
 run_case multi-page 0
-for scenario in wrong-ref wrong-actor rerun disabled extra-recipient existing-output policy-denied token-mismatch token-inactive token-short-page token-drift-total token-duplicate cursor-loop bucket-mismatch bucket-wrong-jurisdiction bad-lifecycle double-document encryption-failed; do
+for scenario in wrong-ref wrong-actor rerun disabled extra-recipient existing-output absent-token invalid-token policy-denied token-mismatch token-inactive token-short-page token-drift-total token-duplicate cursor-loop bucket-mismatch bucket-wrong-jurisdiction bad-lifecycle double-document encryption-failed; do
   run_case "$scenario" 2
 done
 printf '%s\n' 'PASS: bounded bootstrap inventory and ciphertext-only refusals'
