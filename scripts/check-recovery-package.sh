@@ -19,6 +19,7 @@ done
 [[ $(wc -l < "$recipient_file") -eq 1 ]] || fail recipient
 IFS= read -r recipient < "$recipient_file" || fail recipient
 [[ "$recipient" =~ ^age1[0-9a-z]{58}$ ]] || fail recipient
+cmp -s "$recipient_file" <(printf '%s\n' "$recipient") || fail recipient
 [[ $(wc -c < "$manifest") -le 2048 ]] || fail manifest-size
 # Streaming retains duplicate keys that an ordinary JSON object decoder loses.
 jq --stream -s -e '
@@ -39,7 +40,8 @@ jq -s -e --arg recipient "$recipient" '
     (.ciphertextSha256 | type == "string" and test("^[0-9a-f]{64}$")))
 ' "$manifest" >/dev/null 2>&1 || fail manifest
 size=$(wc -c < "$ciphertext")
-[[ "$size" -ge 128 && "$size" -le 33554432 ]] || fail ciphertext-size
+# A 168-byte header still needs a 16-byte nonce and authentication tag.
+[[ "$size" -ge 200 && "$size" -le 33554432 ]] || fail ciphertext-size
 {
   IFS= read -r magic && IFS= read -r stanza &&
     IFS= read -r wrapped && IFS= read -r mac

@@ -19,15 +19,21 @@ if age --decrypt -i "$scratch/wrong-key" "$scratch/base/recovery/dns-snapshot.js
   printf '%s\n' 'FAIL: unrelated identity decrypted synthetic recovery' >&2
   exit 1
 fi
+# Mutate one binding at a time and require the checker to fail closed.
 run_case() {
   local scenario=$1 expected=$2 rc=0
   local case_dir="$scratch/$scenario"
   cp -R "$scratch/base" "$case_dir"
   case "$scenario" in
     damaged) printf 'x' >> "$case_dir/recovery/dns-snapshot.json.age" ;;
-    plaintext|fake-header)
+    plaintext|fake-header|header-only|nonce-only)
       if [[ "$scenario" == fake-header ]]; then
         { printf '%s\n' age-encryption.org/v1; cat "$scratch/payload" "$scratch/payload" "$scratch/payload"; } > "$case_dir/recovery/dns-snapshot.json.age"
+      elif [[ "$scenario" == header-only || "$scenario" == nonce-only ]]; then
+        head -n 4 "$scratch/base/recovery/dns-snapshot.json.age" > "$case_dir/recovery/dns-snapshot.json.age"
+        if [[ "$scenario" == nonce-only ]]; then
+          printf '0123456789abcdef' >> "$case_dir/recovery/dns-snapshot.json.age"
+        fi
       else
         cp "$scratch/payload" "$case_dir/recovery/dns-snapshot.json.age"
       fi
@@ -37,6 +43,9 @@ run_case() {
     wrong-recipient)
       jq --arg recipient "$(age-keygen -y "$scratch/wrong-key")" '.recipient=$recipient' "$case_dir/recovery/manifest.json" > "$case_dir/updated"
       mv "$case_dir/updated" "$case_dir/recovery/manifest.json" ;;
+    recipient-extra) printf 'unterminated' >> "$case_dir/.github/dns-recovery-recipient.txt" ;;
+    recipient-blank-line) printf '\n' >> "$case_dir/.github/dns-recovery-recipient.txt" ;;
+    recipient-no-newline) printf '%s' "$recipient" > "$case_dir/.github/dns-recovery-recipient.txt" ;;
     extra-file) printf '%s\n' 'synthetic private material' > "$case_dir/recovery/private-key.txt" ;;
     symlink)
       rm "$case_dir/recovery/dns-snapshot.json.age"
@@ -67,7 +76,7 @@ run_case() {
   fi
 }
 run_case valid pass
-for scenario in damaged plaintext fake-header wrong-recipient extra-file symlink duplicate-field extra-document unknown-field missing-field; do
+for scenario in damaged plaintext fake-header header-only nonce-only wrong-recipient recipient-extra recipient-blank-line recipient-no-newline extra-file symlink duplicate-field extra-document unknown-field missing-field; do
   run_case "$scenario" refuse
 done
 printf '%s\n' 'PASS: recovery package bindings and plaintext refusals'
