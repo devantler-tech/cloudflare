@@ -26,8 +26,12 @@ the clean and disposable failure fixtures locally.
 - Use OpenTofu 1.12.x and the official Cloudflare provider version pinned in
   `versions.tf`.
 - Pass credentials only through environment variables or the approved private
-  CI secret store. Never commit backend credentials, API tokens, state, plan
-  binaries, or generated values.
+  CI secret store. Never commit plaintext credentials, private keys, state or
+  plans. The maintainer-approved exception is authenticated ciphertext for
+  essential bootstrap recovery in `recovery/`, bound by its registered package
+  validator and an independently recoverable key. Ordinary service credentials
+  stay in OpenBao. The current package covers a historical DNS snapshot only;
+  adding state recovery requires its own reviewed format and recovery proof.
 - Import every existing resource before any apply. During migration, convert
   the plan to JSON and run `scripts/assert-no-destructive-plan.sh`; any delete
   or replacement is a hard stop.

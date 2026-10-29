@@ -45,8 +45,8 @@ From the repository root:
 scripts/test.sh
 ```
 
-It lints the shell scripts, runs the destructive-plan guard against its
-fixtures, checks formatting, downloads the provider with the backend switched
+It lints the shell scripts, runs the destructive-plan and recovery-package
+guards against their fixtures, checks formatting, downloads the provider with the backend switched
 off (`tofu init -backend=false`) and validates the configuration against the
 provider's schema. On success it exits 0, and the output includes these two
 lines:
@@ -89,9 +89,14 @@ credentials from the maintainers' private custody and are not part of local
 setup or of a first contribution. They are described in
 [`docs/runbooks/bootstrap-and-recovery.md`](docs/runbooks/bootstrap-and-recovery.md).
 
+The retained pre-migration DNS snapshot lives as authenticated ciphertext in
+[`recovery/`](recovery/). Its recovery key is held independently in iCloud
+Keychain. This historical snapshot is neither current desired configuration nor
+OpenTofu state; the runbook describes its limits and recovery checks.
+
 In those procedures the provider reads `CLOUDFLARE_API_TOKEN`, and the state
 backend reads the standard `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
-variables. Keep all three out of shell history and repository files.
+variables. Keep all three out of shell history and plaintext repository files.
 
 ## Dependency updates
 

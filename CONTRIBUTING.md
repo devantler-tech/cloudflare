@@ -15,8 +15,8 @@ credentials or access to the maintainers' infrastructure.
 ## Make a first documentation change
 
 You need Git, [OpenTofu](https://opentofu.org/docs/intro/install/) on the 1.12
-line, [ShellCheck](https://github.com/koalaman/shellcheck#installing), `jq`, a
-POSIX shell, and network access to `registry.opentofu.org` and to GitHub's
+line, [ShellCheck](https://github.com/koalaman/shellcheck#installing), `jq`, age,
+a POSIX shell, and network access to `registry.opentofu.org` and to GitHub's
 release downloads. There are no submodules.
 
 Fork `devantler-tech/cloudflare` on GitHub. Replace `YOUR-LOGIN` with your
@@ -56,8 +56,9 @@ short:
 - Keep provider versions as exact pins and stay on the OpenTofu 1.12 line.
 - Keep `prevent_destroy` on the zone and on every R2 bucket.
 - Never commit credentials, tokens, state, plan files, `backend.hcl` or
-  `production.auto.tfvars`. The two `*.example` files show the expected shape
-  with placeholder values only.
+  `production.auto.tfvars` in plaintext. The narrow authenticated-ciphertext
+  recovery exception is defined by `AGENTS.md` and the recovery package checker.
+  The two `*.example` files contain placeholder values only.
 
 This guide adds one expectation of its own: a change to
 `scripts/assert-no-destructive-plan.sh` comes with a fixture under
