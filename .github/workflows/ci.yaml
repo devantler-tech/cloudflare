@@ -126,7 +126,7 @@ jobs:
     permissions: {}
     steps:
       - name: ✅ Aggregate job checks
-        uses: devantler-tech/.github/actions/aggregate-job-checks@cd557b575d7f608caa2aa221e0fc854f1e3a95e1 # v13.2.1
+        uses: devantler-tech/.github/actions/aggregate-job-checks@bd24a3e1bbbf6aba2d7afd58a2fd8a3d67bebe6b # v19.0.3
         with:
           job-results: >-
             ${{ needs.validate.result }}
