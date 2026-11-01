@@ -137,6 +137,39 @@ an observation, never a generated empty prefix or desired rule change.
 
 ## First migration
 
+### First state-bucket proposal
+
+Run **State bootstrap plan (encrypted, read-only)** from reviewed `main` with
+`PLAN_STATE_BOOTSTRAP`. It uses the existing CI credential, reads the owned zone
+and verifies that the proposed default-jurisdiction state bucket is absent.
+Only Cloudflare's documented [NoSuchBucket response](https://developers.cloudflare.com/r2/api/error-codes/)
+counts as absence; permission errors and an existing bucket stop the proposal.
+
+The workflow initializes a private local backend and imports only the existing
+zone. It then saves a real OpenTofu plan using the repository's pinned provider.
+The permitted proposal is exactly one unchanged zone and one new protected state
+bucket. All existing DNS records, buckets and tokens remain outside this first
+adoption set. An unrelated change, zone update, deletion, replacement, deferred
+evaluation or provider error stops export. No apply command exists in this path.
+
+The one-day `encrypted-state-bootstrap-plan` artifact contains the imported
+state and complete desired configuration in the registered state-recovery
+format, plus encrypted binary and JSON plans. `plan-manifest.json` binds their
+plaintext and ciphertext digests to that state generation, source revision and
+run. Tool output and decrypted files stay in transient private scratch.
+
+Before approving an apply, download into private custody, verify the source/run
+against Actions, run `check-state-recovery-package.sh` with the independent
+identity, decrypt both plans privately, and check every manifest digest. Read
+the complete JSON plan and compare its state/configuration binding. A successful
+encrypted export proves a proposal, not custody publication, backend locking,
+write permission or disaster recovery. The saved imported lineage must be
+preserved when preparing its reviewed apply; do not initialize a second lineage
+or silently regenerate the approved plan. Apply and state migration remain
+separate gated work below.
+
+### Migration and recovery gates
+
 1. Inventory zones, records, buckets, lifecycle and lock settings, members, and
    tokens by identifier and purpose. Record no token values.
 2. Fill a gitignored `production.auto.tfvars` from
