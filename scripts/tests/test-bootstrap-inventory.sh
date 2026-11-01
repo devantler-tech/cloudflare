@@ -70,20 +70,59 @@ case "$url" in
     jq -n --arg scenario "$FIXTURE_CASE" '{success:true,result:[{id:"77777777777777777777777777777777",name:"PRIVATE_FIXTURE_LAST_TOKEN",status:"disabled"}],result_info:{page:2,per_page:50,count:1,total_count:(if $scenario=="token-drift-total" then 52 else 51 end)}}' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets?per_page=1000')
     jq -n --arg jurisdiction "$jurisdiction" --arg scenario "$FIXTURE_CASE" '{success:true,result:{buckets:(if $jurisdiction=="default" then [{name:"fixture-bucket",jurisdiction:(if $scenario=="bucket-wrong-jurisdiction" then "eu" else "default" end),location:"weur",storage_class:"Standard",creation_date:"2026-10-29T00:00:00Z"}] else [] end)},result_info:{total_count:(if $jurisdiction=="default" then (if $scenario=="multi-page" then 2 else 1 end) else 0 end),per_page:1000,cursor:(if $scenario=="cursor-loop" then "repeated" elif $scenario=="multi-page" and $jurisdiction=="default" then "second" else null end)}} |
+      if $scenario=="multi-page" then .result_info.per_page=1
+      elif $scenario=="bucket-clamped-page-size" then .result_info.per_page=(if $jurisdiction=="default" then 20 else 0 end)
+      else . end |
       if $scenario=="bucket-missing-total" then del(.result_info.total_count)
+      elif $scenario=="bucket-optional-metadata" then .result.buckets|=map(del(.jurisdiction,.location,.storage_class))
+      elif $scenario=="bucket-null-metadata" then .result.buckets|=map(.jurisdiction=null|.location=null|.storage_class=null)
+      elif $scenario=="bucket-location-type" then .result.buckets[0].location=123
+      elif $scenario=="bucket-storage-class-invalid" then .result.buckets[0].storage_class="unsupported"
       elif $scenario=="bucket-missing-page-size" then del(.result_info.per_page)
+      elif $scenario=="bucket-null-page-size" then .result_info.per_page=null
+      elif $scenario=="bucket-page-size-type" then .result_info.per_page="20"
+      elif $scenario=="bucket-page-size-negative" then .result_info.per_page = -1
+      elif $scenario=="bucket-page-size-fraction" then .result_info.per_page=1.5
+      elif $scenario=="bucket-page-size-overflow" then .result_info.per_page=1001
+      elif $scenario=="bucket-page-size-short" then .result_info.per_page=0
+      elif $scenario=="bucket-short-page" then .result_info.total_count=2 | .result_info.per_page=1
+      elif $scenario=="bucket-drift-total" or $scenario=="bucket-duplicate" then .result_info.total_count=2 | .result_info.per_page=1 | .result_info.cursor="second"
+      elif $scenario=="bucket-result-overflow" then .result_info.total_count=100 | .result.buckets=[range(0;101)|{name:("fixture-bucket-"+tostring),jurisdiction:"default",location:"weur",storage_class:"Standard"}]
+      elif $scenario=="bucket-total-overflow" then .result_info.total_count=101
+      elif ($scenario=="many-pages" or $scenario=="hundred-pages" or $scenario=="page-budget") and $jurisdiction=="default" then
+        .result_info.total_count=(if $scenario=="many-pages" then 11 elif $scenario=="hundred-pages" then 100 else 1 end) |
+        .result_info.per_page=1 | .result_info.cursor="page2"
       elif $scenario=="bucket-malformed-envelope" then .success=false | .errors=[{message:"PRIVATE_FIXTURE_PROVIDER_ERROR"}]
       else . end' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets?per_page=1000&cursor=repeated')
     jq -n '{success:true,result:{buckets:[]},result_info:{total_count:1,per_page:1000,cursor:"repeated"}}' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets?per_page=1000&cursor=second')
-    jq -n '{success:true,result:{buckets:[{name:"fixture-bucket-two",jurisdiction:"default",location:"weur",storage_class:"Standard",creation_date:"2026-10-29T00:00:00Z"}]},result_info:{total_count:2,per_page:1000,cursor:null}}' ;;
+    jq -n --arg scenario "$FIXTURE_CASE" '{success:true,result:{buckets:[{name:(if $scenario=="bucket-duplicate" then "fixture-bucket" else "fixture-bucket-two" end),jurisdiction:"default",location:"weur",storage_class:"Standard",creation_date:"2026-10-29T00:00:00Z"}]},result_info:{total_count:(if $scenario=="bucket-drift-total" then 3 else 2 end),per_page:1,cursor:null}}' ;;
+  'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets?per_page=1000&cursor=page'*)
+    page=${url##*cursor=page}
+    [[ $page =~ ^[0-9]+$ && $page -ge 2 && $page -le 100 ]]
+    jq -n --arg scenario "$FIXTURE_CASE" --argjson page "$page" '
+      (if $scenario=="many-pages" then 11 elif $scenario=="hundred-pages" then 100 else 1 end) as $total |
+      {success:true,result:{buckets:(if $scenario=="page-budget" then [] else [{name:("fixture-page-"+($page|tostring)),jurisdiction:"default",location:"weur",storage_class:"Standard"}] end)},
+        result_info:{total_count:$total,per_page:1,cursor:(if $scenario=="page-budget" or $page<$total then "page"+(($page+1)|tostring) else null end)}}' ;;
+  'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets/fixture-page-'*'/lifecycle')
+    jq -n '{success:true,result:{rules:[]}}' ;;
+  'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets/fixture-page-'*)
+    bucket=${url##*/}
+    [[ $bucket =~ ^fixture-page-[0-9]+$ ]]
+    jq -n --arg name "$bucket" '{success:true,result:{name:$name,jurisdiction:"default",location:"weur",storage_class:"Standard"}}' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets/fixture-bucket-two')
     jq -n '{success:true,result:{name:"fixture-bucket-two",jurisdiction:"default",location:"weur",storage_class:"Standard",creation_date:"2026-10-29T00:00:00Z"}}' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets/fixture-bucket-two/lifecycle')
     jq -n '{success:true,result:{rules:[]}}' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets/fixture-bucket')
-    jq -n --arg scenario "$FIXTURE_CASE" '{success:true,result:{name:(if $scenario=="bucket-mismatch" then "other-bucket" else "fixture-bucket" end),jurisdiction:"default",location:"weur",storage_class:"Standard",creation_date:"2026-10-29T00:00:00Z"}}' ;;
+    jq -n --arg scenario "$FIXTURE_CASE" '{success:true,result:{name:(if $scenario=="bucket-mismatch" then "other-bucket" else "fixture-bucket" end),jurisdiction:"default",location:"weur",storage_class:"Standard",creation_date:"2026-10-29T00:00:00Z"}} |
+      if $scenario=="bucket-optional-metadata" or $scenario=="bucket-detail-optional" then del(.result.jurisdiction,.result.location,.result.storage_class)
+      elif $scenario=="bucket-null-metadata" then .result.jurisdiction=null | .result.location=null | .result.storage_class=null
+      elif $scenario=="metadata-wrong-jurisdiction" then .result.jurisdiction="eu"
+      elif $scenario=="metadata-location-type" then .result.location=123
+      elif $scenario=="metadata-storage-class-invalid" then .result.storage_class="unsupported"
+      else . end' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets/fixture-bucket/lifecycle')
     jq -n --arg scenario "$FIXTURE_CASE" '{success:true,result:{rules:(if $scenario=="bad-lifecycle" then null else [{id:"fixture-expiry",enabled:true,conditions:{prefix:"PRIVATE_FIXTURE_PREFIX"}}] end)}}' ;;
   *) exit 82 ;;
@@ -132,9 +171,23 @@ run_case() {
     grep -qx 'BOOTSTRAP_INVENTORY=ENCRYPTED_READS' "$case_dir/log"
     [[ $(find "$case_dir/out" -type f | wc -l) -eq 2 ]]
     age --decrypt -i "$scratch/key" "$case_dir/out/bootstrap-inventory.json.age" 2>/dev/null |
-      jq -e --arg scenario "$scenario" '.schema == 1 and .source_revision == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and .account_id == "22222222222222222222222222222222" and .token_inventory.coverage == "credential-visible-only" and (.buckets|length)==(if $scenario=="multi-page" then 2 else 1 end) and (.token_inventory.tokens|length)==(if $scenario=="multi-page" then 51 else 1 end) and any(.buckets[];.metadata.name=="fixture-bucket" and .lifecycle.rules[0].conditions.prefix=="PRIVATE_FIXTURE_PREFIX")' >/dev/null
+      jq -e --arg scenario "$scenario" '.schema == 1 and .source_revision == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and .account_id == "22222222222222222222222222222222" and .token_inventory.coverage == "credential-visible-only" and (.buckets|length)==(if $scenario=="multi-page" then 2 elif $scenario=="many-pages" then 11 elif $scenario=="hundred-pages" then 100 else 1 end) and (.token_inventory.tokens|length)==(if $scenario=="multi-page" then 51 else 1 end) and any(.buckets[];.metadata.name=="fixture-bucket" and .lifecycle.rules[0].conditions.prefix=="PRIVATE_FIXTURE_PREFIX")' >/dev/null
     age --decrypt -i "$scratch/key" "$case_dir/out/dns-snapshot.json.age" 2>/dev/null |
       jq -e '.records[0].content == "PRIVATE_FIXTURE_DNS"' >/dev/null
+    if [[ $scenario == bucket-optional-metadata ]]; then
+      age --decrypt -i "$scratch/key" "$case_dir/out/bootstrap-inventory.json.age" 2>/dev/null |
+        jq -e 'all(.buckets[]; .requested_jurisdiction=="default" and
+          (.metadata|has("jurisdiction")|not) and (.metadata|has("location")|not) and
+          (.metadata|has("storage_class")|not))' >/dev/null
+    fi
+    if [[ $scenario == bucket-detail-optional ]]; then
+      age --decrypt -i "$scratch/key" "$case_dir/out/bootstrap-inventory.json.age" 2>/dev/null |
+        jq -e '.buckets[0] | .requested_jurisdiction=="default" and
+          .list_observation.name=="fixture-bucket" and .list_observation.jurisdiction=="default" and
+          .list_observation.location=="weur" and .list_observation.storage_class=="Standard" and
+          (.metadata|has("jurisdiction")|not) and (.metadata|has("location")|not) and
+          (.metadata|has("storage_class")|not)' >/dev/null || { printf 'FAIL %s: list metadata was not retained\n' "$scenario"; exit 1; }
+    fi
     if grep -Rq PRIVATE_FIXTURE_ "$case_dir/out"; then echo 'FAIL: plaintext artifact'; exit 1; fi
   else
     grep -qx 'BOOTSTRAP_INVENTORY=UNVERIFIED' "$case_dir/log"
@@ -142,10 +195,12 @@ run_case() {
   fi
   local expected_reason='' expected_http=''
   case "$scenario" in
+    page-budget) grep -q 'cursor=page100$' "$case_dir/calls"; ! grep -q 'cursor=page101' "$case_dir/calls" ;;
     bucket-http-denied) expected_reason=provider-http; expected_http=403 ;;
     bucket-malformed-envelope) expected_reason=provider-envelope; expected_http=200 ;;
     bucket-missing-total) expected_reason=bucket-total; expected_http=200 ;;
-    bucket-missing-page-size) expected_reason=bucket-page-size; expected_http=200 ;;
+    bucket-page-size-type|bucket-page-size-negative|bucket-page-size-fraction|bucket-page-size-overflow|bucket-page-size-short) expected_reason=bucket-page-size; expected_http=200 ;;
+    bucket-result-overflow) expected_reason=bucket-result-bound; expected_http=200 ;;
     bucket-status-private) expected_reason=provider-status; expected_http=none ;;
     bucket-transport-failure) expected_reason=provider-transport; expected_http=none ;;
   esac
@@ -162,7 +217,16 @@ run_case() {
 }
 run_case valid 0
 run_case multi-page 0
-for scenario in wrong-ref wrong-actor rerun disabled extra-recipient existing-output absent-token invalid-token policy-denied token-mismatch token-inactive token-short-page token-drift-total token-duplicate cursor-loop bucket-mismatch bucket-wrong-jurisdiction bucket-http-denied bucket-malformed-envelope bucket-missing-total bucket-missing-page-size bucket-status-private bucket-transport-failure bad-lifecycle double-document encryption-failed; do
+run_case bucket-clamped-page-size 0
+run_case bucket-missing-page-size 0
+run_case bucket-null-page-size 0
+run_case bucket-optional-metadata 0
+run_case bucket-null-metadata 0
+run_case many-pages 0
+run_case hundred-pages 0
+run_case bucket-detail-optional 0
+for scenario in wrong-ref wrong-actor rerun disabled extra-recipient existing-output absent-token invalid-token policy-denied token-mismatch token-inactive token-short-page token-drift-total token-duplicate cursor-loop bucket-mismatch bucket-wrong-jurisdiction bucket-location-type bucket-storage-class-invalid metadata-wrong-jurisdiction metadata-location-type metadata-storage-class-invalid bucket-http-denied bucket-malformed-envelope bucket-missing-total bucket-status-private bucket-transport-failure bucket-page-size-type bucket-page-size-negative bucket-page-size-fraction bucket-page-size-overflow bucket-page-size-short bucket-short-page bucket-drift-total bucket-duplicate bucket-result-overflow bucket-total-overflow bad-lifecycle double-document encryption-failed; do
   run_case "$scenario" 2
 done
+run_case page-budget 2
 printf '%s\n' 'PASS: bounded bootstrap inventory and ciphertext-only refusals'
