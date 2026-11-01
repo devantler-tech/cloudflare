@@ -138,7 +138,7 @@ for jurisdiction in default eu us; do
   while :; do
     stage='bucket-list'
     page=$((page+1))
-    ((page <= 10)) || stop
+    ((page <= 100)) || stop
     url="$base/r2/buckets?per_page=1000"
     [[ -z "$cursor" ]] || url+="&cursor=$(jq -nr --arg cursor "$cursor" '$cursor|@uri')"
     response="$scratch/buckets-$jurisdiction-$page.json"
@@ -185,6 +185,9 @@ for jurisdiction in default eu us; do
   jq -r '.[].name' "$scratch/list-$jurisdiction.json" > "$scratch/bucket-names" 2>/dev/null || stop
   while IFS= read -r bucket; do
     stage='bucket-metadata'
+    jq -e --arg name "$bucket" '[.[] | select(.name == $name)] |
+      if length == 1 then .[0] else error("ambiguous list observation") end
+    ' "$scratch/list-$jurisdiction.json" > "$scratch/list-observation.json" 2>/dev/null || stop
     read_cloudflare "$base/r2/buckets/$bucket" "$jurisdiction" > "$scratch/metadata.json" || stop
     jq -e --arg name "$bucket" --arg jurisdiction "$jurisdiction" '.success == true and
       .result.name == $name and (.result.jurisdiction == null or .result.jurisdiction == $jurisdiction) and
@@ -198,8 +201,9 @@ for jurisdiction in default eu us; do
         (.enabled|type == "boolean") and (.conditions.prefix|type == "string")) and
       ([.result.rules[].id]|length) == ([.result.rules[].id]|unique|length)
     ' "$scratch/lifecycle.json" >/dev/null 2>&1 || stop
-    jq -n --arg jurisdiction "$jurisdiction" --slurpfile metadata "$scratch/metadata.json" --slurpfile lifecycle "$scratch/lifecycle.json" \
-      '{requested_jurisdiction:$jurisdiction,metadata:$metadata[0].result,lifecycle:$lifecycle[0].result}' > "$scratch/buckets/$jurisdiction-$bucket.json" 2>/dev/null || stop
+    jq -n --arg jurisdiction "$jurisdiction" --slurpfile listed "$scratch/list-observation.json" \
+      --slurpfile metadata "$scratch/metadata.json" --slurpfile lifecycle "$scratch/lifecycle.json" \
+      '{requested_jurisdiction:$jurisdiction,list_observation:$listed[0],metadata:$metadata[0].result,lifecycle:$lifecycle[0].result}' > "$scratch/buckets/$jurisdiction-$bucket.json" 2>/dev/null || stop
   done < "$scratch/bucket-names"
 done
 unset provider_token
