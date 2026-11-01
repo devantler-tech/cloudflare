@@ -44,6 +44,10 @@ esac
 private=$(mktemp -d)
 trap 'rm -rf "$private"' EXIT
 trap 'exit 2' INT TERM
+# A key that can decrypt a file might be an older or unrelated identity from
+# the same store. Bind the sole native public identity before decryption.
+age-keygen -y "$identity" > "$private/recipient" 2>/dev/null || state_fail identity-recipient
+cmp -s "$private/recipient" <(printf '%s\n' "$recipient") || state_fail identity-recipient
 age --decrypt -i "$identity" "$package/state.json.age" > "$private/state.json" 2>/dev/null || state_fail authentication
 age --decrypt -i "$identity" "$package/configuration.json.age" > "$private/configuration.json" 2>/dev/null || state_fail authentication
 state_payloads "$private/state.json" "$private/configuration.json"

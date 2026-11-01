@@ -48,6 +48,18 @@ grep -qx 'CLOUDFLARE_STATE_RECOVERY=VERIFIED scope=authenticated-files' "$scratc
 cp "$scratch/identity" "$scratch/exposed-identity"
 chmod 0644 "$scratch/exposed-identity"
 refuse bash "$repo_root/scripts/check-state-recovery-package.sh" "$scratch/root" "$scratch/package" --identity-file "$scratch/exposed-identity"
+# A valid ciphertext can lie about its recipient in the public manifest. A key
+# that decrypts it is insufficient unless that key is the reviewed recipient.
+cp -R "$scratch/package" "$scratch/recipient-lie"
+for file in state configuration; do
+  rm "$scratch/recipient-lie/$file.json.age"
+  input="$scratch/state.json"; [[ "$file" != configuration ]] || input="$scratch/config.json"
+  age --encrypt -r "$(age-keygen -y "$scratch/wrong-identity")" -o "$scratch/recipient-lie/$file.json.age" "$input"
+  digest=$(shasum -a 256 "$scratch/recipient-lie/$file.json.age")
+  jq --arg key "${file}CiphertextSha256" --arg digest "${digest%% *}" '.[$key]=$digest' "$scratch/recipient-lie/manifest.json" > "$scratch/update"
+  mv "$scratch/update" "$scratch/recipient-lie/manifest.json"
+done
+refuse bash "$repo_root/scripts/check-state-recovery-package.sh" "$scratch/root" "$scratch/recipient-lie" --identity-file "$scratch/wrong-identity"
 for scenario in lineage serial digest duplicate extra-file symlink plaintext wrong-recipient; do
   cp -R "$scratch/package" "$scratch/$scenario"
   case "$scenario" in
