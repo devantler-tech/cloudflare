@@ -82,6 +82,16 @@ consistent pagination and unique identities. Bucket inventory is capped at 100
 per jurisdiction and token inventory at 1,000 visible rows. A denied or ambiguous
 read refuses the whole export. No object contents or token secret values are read.
 
+R2's response page-size hint may be absent or smaller than the requested limit.
+Completeness requires stable total counts, cursor exhaustion and unique observed
+bucket names; a page-size echo alone proves none of these. Explicit size hints
+must remain consistent with the observed page and the bounded request. Optional
+bucket hints stay exactly as returned, with the requested jurisdiction recorded
+separately. Missing hints do not become desired configuration or migration
+clearance, and a conflicting reported jurisdiction or malformed hint is refused.
+
+See the [R2 list response contract](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/list/).
+
 `ENCRYPTED_READS` proves only that these scoped reads and encryption succeeded.
 Failed runs report a fixed `INVENTORY_STAGE` and `INVENTORY_FAILURE` category,
 plus `INVENTORY_HTTP_STATUS` as three digits or `none`. These diagnostics contain

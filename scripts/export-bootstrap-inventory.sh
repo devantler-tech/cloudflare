@@ -145,16 +145,24 @@ for jurisdiction in default eu us; do
     read_cloudflare "$url" "$jurisdiction" > "$response" || stop
     failure='bucket-shape'
     bucket_failure=$(jq -r --arg jurisdiction "$jurisdiction" '
+      # R2 may omit or clamp this optional hint. Completeness comes from
+      # stable totals, cursor exhaustion and unique observed bucket names.
+      def page_size_matches($count):
+        if . == null then true
+        elif type != "number" then false
+        else . == floor and . >= 0 and . <= 1000 and . >= $count end;
       if (.result.buckets|type) != "array" then "bucket-array"
       elif (.result_info.total_count|type) != "number" then "bucket-total"
       elif .result_info.total_count != (.result_info.total_count|floor) or
         .result_info.total_count < 0 or .result_info.total_count > 100 then "bucket-total"
-      elif .result_info.per_page != 1000 or (.result.buckets|length) > 100 then "bucket-page-size"
+      elif (.result.buckets|length) > 100 then "bucket-result-bound"
+      elif ((.result.buckets|length) as $count |
+        .result_info.per_page | page_size_matches($count) | not) then "bucket-page-size"
       elif any(.result.buckets[]; (.name|type != "string") or
         (.name|test("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")|not)) then "bucket-name"
-      elif any(.result.buckets[]; .jurisdiction != $jurisdiction) then "bucket-jurisdiction"
-      elif any(.result.buckets[]; (.location|type) != "string") then "bucket-location"
-      elif any(.result.buckets[]; .storage_class != "Standard" and
+      elif any(.result.buckets[]; .jurisdiction != null and .jurisdiction != $jurisdiction) then "bucket-jurisdiction"
+      elif any(.result.buckets[]; .location != null and (.location|type) != "string") then "bucket-location"
+      elif any(.result.buckets[]; .storage_class != null and .storage_class != "Standard" and
         .storage_class != "InfrequentAccess") then "bucket-storage-class"
       elif .result_info.cursor != null and
         (.result_info.cursor|type != "string" or length > 2048) then "bucket-cursor"
@@ -179,9 +187,9 @@ for jurisdiction in default eu us; do
     stage='bucket-metadata'
     read_cloudflare "$base/r2/buckets/$bucket" "$jurisdiction" > "$scratch/metadata.json" || stop
     jq -e --arg name "$bucket" --arg jurisdiction "$jurisdiction" '.success == true and
-      .result.name == $name and .result.jurisdiction == $jurisdiction and
-      (.result.location|type == "string") and
-      (.result.storage_class == "Standard" or .result.storage_class == "InfrequentAccess")
+      .result.name == $name and (.result.jurisdiction == null or .result.jurisdiction == $jurisdiction) and
+      (.result.location == null or (.result.location|type == "string")) and
+      (.result.storage_class == null or .result.storage_class == "Standard" or .result.storage_class == "InfrequentAccess")
     ' "$scratch/metadata.json" >/dev/null 2>&1 || stop
     stage='bucket-lifecycle'
     read_cloudflare "$base/r2/buckets/$bucket/lifecycle" "$jurisdiction" > "$scratch/lifecycle.json" || stop
@@ -190,8 +198,8 @@ for jurisdiction in default eu us; do
         (.enabled|type == "boolean") and (.conditions.prefix|type == "string")) and
       ([.result.rules[].id]|length) == ([.result.rules[].id]|unique|length)
     ' "$scratch/lifecycle.json" >/dev/null 2>&1 || stop
-    jq -n --slurpfile metadata "$scratch/metadata.json" --slurpfile lifecycle "$scratch/lifecycle.json" \
-      '{metadata:$metadata[0].result,lifecycle:$lifecycle[0].result}' > "$scratch/buckets/$jurisdiction-$bucket.json" 2>/dev/null || stop
+    jq -n --arg jurisdiction "$jurisdiction" --slurpfile metadata "$scratch/metadata.json" --slurpfile lifecycle "$scratch/lifecycle.json" \
+      '{requested_jurisdiction:$jurisdiction,metadata:$metadata[0].result,lifecycle:$lifecycle[0].result}' > "$scratch/buckets/$jurisdiction-$bucket.json" 2>/dev/null || stop
   done < "$scratch/bucket-names"
 done
 unset provider_token
