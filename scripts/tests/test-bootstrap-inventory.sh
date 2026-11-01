@@ -20,7 +20,7 @@ cat > "$scratch/bin/curl" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ -z ${CLOUDFLARE_API_TOKEN:-} && $1 == --disable ]]
-url='' jurisdiction=default
+url='' jurisdiction=default output='' write_out=''
 while [[ $# -gt 0 ]]; do
   case $1 in
     --disable|--silent|--fail) shift ;;
@@ -31,6 +31,8 @@ while [[ $# -gt 0 ]]; do
     --max-redirs) [[ $2 == 0 ]]; shift 2 ;;
     --connect-timeout|--max-time|--max-filesize) shift 2 ;;
     --header) jurisdiction=${2#cf-r2-jurisdiction: }; shift 2 ;;
+    --output) output=$2; shift 2 ;;
+    --write-out) [[ $2 == '%{http_code}' ]]; write_out=$2; shift 2 ;;
     --url) url=$2; shift 2 ;;
     *) exit 81 ;;
   esac
@@ -38,6 +40,16 @@ done
 IFS= read -r header
 [[ $header == 'header = "Authorization: Bearer AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"' ]]
 printf '%s %s\n' "$jurisdiction" "$url" >> "$FIXTURE_DIR/calls"
+if [[ -n $output ]]; then
+  [[ -n $write_out ]]
+  exec 3>&1
+  exec > "$output"
+fi
+if [[ $url == */r2/buckets\?* && $FIXTURE_CASE == bucket-http-denied ]]; then
+  printf '%s\n' '{"success":false,"errors":[{"message":"PRIVATE_FIXTURE_PROVIDER_ERROR"}]}'
+  [[ -z $output ]] || printf '403' >&3
+  exit 22
+fi
 case "$url" in
   'https://api.cloudflare.com/client/v4/zones?name=devantler.tech&per_page=50')
     jq -n '{success:true,result:[{id:"11111111111111111111111111111111",name:"devantler.tech",status:"active",account:{id:"22222222222222222222222222222222"}}],result_info:{total_count:1,total_pages:1}}' ;;
@@ -53,7 +65,11 @@ case "$url" in
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/tokens?per_page=50&page=2&include_expired=true')
     jq -n --arg scenario "$FIXTURE_CASE" '{success:true,result:[{id:"77777777777777777777777777777777",name:"PRIVATE_FIXTURE_LAST_TOKEN",status:"disabled"}],result_info:{page:2,per_page:50,count:1,total_count:(if $scenario=="token-drift-total" then 52 else 51 end)}}' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets?per_page=1000')
-    jq -n --arg jurisdiction "$jurisdiction" --arg scenario "$FIXTURE_CASE" '{success:true,result:{buckets:(if $jurisdiction=="default" then [{name:"fixture-bucket",jurisdiction:(if $scenario=="bucket-wrong-jurisdiction" then "eu" else "default" end),location:"weur",storage_class:"Standard",creation_date:"2026-10-29T00:00:00Z"}] else [] end)},result_info:{total_count:(if $jurisdiction=="default" then (if $scenario=="multi-page" then 2 else 1 end) else 0 end),per_page:1000,cursor:(if $scenario=="cursor-loop" then "repeated" elif $scenario=="multi-page" and $jurisdiction=="default" then "second" else null end)}}' ;;
+    jq -n --arg jurisdiction "$jurisdiction" --arg scenario "$FIXTURE_CASE" '{success:true,result:{buckets:(if $jurisdiction=="default" then [{name:"fixture-bucket",jurisdiction:(if $scenario=="bucket-wrong-jurisdiction" then "eu" else "default" end),location:"weur",storage_class:"Standard",creation_date:"2026-10-29T00:00:00Z"}] else [] end)},result_info:{total_count:(if $jurisdiction=="default" then (if $scenario=="multi-page" then 2 else 1 end) else 0 end),per_page:1000,cursor:(if $scenario=="cursor-loop" then "repeated" elif $scenario=="multi-page" and $jurisdiction=="default" then "second" else null end)}} |
+      if $scenario=="bucket-missing-total" then del(.result_info.total_count)
+      elif $scenario=="bucket-missing-page-size" then del(.result_info.per_page)
+      elif $scenario=="bucket-malformed-envelope" then .success=false | .errors=[{message:"PRIVATE_FIXTURE_PROVIDER_ERROR"}]
+      else . end' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets?per_page=1000&cursor=repeated')
     jq -n '{success:true,result:{buckets:[]},result_info:{total_count:1,per_page:1000,cursor:"repeated"}}' ;;
   'https://api.cloudflare.com/client/v4/accounts/22222222222222222222222222222222/r2/buckets?per_page=1000&cursor=second')
@@ -70,6 +86,13 @@ case "$url" in
 esac
 if [[ $FIXTURE_CASE == double-document && $url == */tokens/44444444444444444444444444444444 ]]; then
   printf '%s\n' '{"success":true,"result":{}}'
+fi
+if [[ -n $output ]]; then
+  if [[ $url == */r2/buckets\?* && $FIXTURE_CASE == bucket-status-private ]]; then
+    printf 'PRIVATE_FIXTURE_STATUS' >&3
+  else
+    printf '200' >&3
+  fi
 fi
 STUB
 chmod +x "$scratch/bin/curl"
@@ -113,13 +136,28 @@ run_case() {
     grep -qx 'BOOTSTRAP_INVENTORY=UNVERIFIED' "$case_dir/log"
     [[ ! -e "$case_dir/out" || $scenario == existing-output ]]
   fi
+  local expected_reason='' expected_http=''
+  case "$scenario" in
+    bucket-http-denied) expected_reason=provider-http; expected_http=403 ;;
+    bucket-malformed-envelope) expected_reason=provider-envelope; expected_http=200 ;;
+    bucket-missing-total) expected_reason=bucket-total; expected_http=200 ;;
+    bucket-missing-page-size) expected_reason=bucket-page-size; expected_http=200 ;;
+    bucket-status-private) expected_reason=provider-status; expected_http=none ;;
+  esac
+  if [[ -n $expected_reason ]]; then
+    if ! grep -qx "INVENTORY_FAILURE=$expected_reason" "$case_dir/log" ||
+      ! grep -qx "INVENTORY_HTTP_STATUS=$expected_http" "$case_dir/log"; then
+      printf 'FAIL %s: missing safe failure reason or HTTP status\n' "$scenario"
+      exit 1
+    fi
+  fi
   case "$scenario" in
     wrong-ref|wrong-actor|rerun|disabled|extra-recipient|existing-output|absent-token|invalid-token) [[ ! -s "$case_dir/calls" ]] ;;
   esac
 }
 run_case valid 0
 run_case multi-page 0
-for scenario in wrong-ref wrong-actor rerun disabled extra-recipient existing-output absent-token invalid-token policy-denied token-mismatch token-inactive token-short-page token-drift-total token-duplicate cursor-loop bucket-mismatch bucket-wrong-jurisdiction bad-lifecycle double-document encryption-failed; do
+for scenario in wrong-ref wrong-actor rerun disabled extra-recipient existing-output absent-token invalid-token policy-denied token-mismatch token-inactive token-short-page token-drift-total token-duplicate cursor-loop bucket-mismatch bucket-wrong-jurisdiction bucket-http-denied bucket-malformed-envelope bucket-missing-total bucket-missing-page-size bucket-status-private bad-lifecycle double-document encryption-failed; do
   run_case "$scenario" 2
 done
 printf '%s\n' 'PASS: bounded bootstrap inventory and ciphertext-only refusals'

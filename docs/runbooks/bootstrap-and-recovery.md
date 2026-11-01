@@ -83,6 +83,11 @@ per jurisdiction and token inventory at 1,000 visible rows. A denied or ambiguou
 read refuses the whole export. No object contents or token secret values are read.
 
 `ENCRYPTED_READS` proves only that these scoped reads and encryption succeeded.
+Failed runs report a fixed `INVENTORY_STAGE` and `INVENTORY_FAILURE` category,
+plus `INVENTORY_HTTP_STATUS` as three digits or `none`. These diagnostics contain
+no provider response bodies, URLs, account identifiers, bucket names or token
+values. A reported HTTP status does not establish complete inventory access;
+read the failure category before deciding whether another observation is useful.
 Cloudflare may limit a token list to tokens created by the caller; the package
 therefore labels token coverage `credential-visible-only`. It proves neither
 account-wide token coverage nor write permissions. Government jurisdictions are
