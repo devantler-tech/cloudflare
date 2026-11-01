@@ -63,15 +63,16 @@ below remain in effect. A completed snapshot does not enable an apply.
 
 The manual **Bootstrap inventory (encrypted, read-only)** workflow accepts only
 `EXPORT_BOOTSTRAP_INVENTORY`, the approved operator, reviewed `main`, and a first
-attempt. It uses the dedicated `CLOUDFLARE_BOOTSTRAP_READ_TOKEN` Actions secret;
-it never changes permissions or provider resources. Invalid dispatches stop
-before the credential-bearing step. A missing bootstrap credential stops before
-a provider call; there is no fallback to shared DNS, tunnel or object-backup
-credentials. Keep the ordinary service value in OpenBao and an independent
-runner copy in the approved repository secret store. The maintainer applies
-the initial credential handoff using the private bootstrap instructions. This
-does not change the existing shared token or its consumers. Never put credential
-values into an issue, plan, command argument or chat.
+attempt. It uses the existing approved `CLOUDFLARE_API_TOKEN` Actions binding,
+also used by the read-only connection check. No additional credential handoff
+is required. The workflow never changes permissions or provider resources;
+invalid dispatches stop before the credential-bearing step. A missing credential
+stops before a provider call, and any insufficient read permission refuses the
+entire export. There is no fallback to other DNS, tunnel or object-backup
+credentials. Keep service credentials in OpenBao and the existing independent
+runner copy in the approved repository secret store. This does not change the
+token or its consumers. Never put credential values into an issue, plan,
+command argument or chat.
 
 The one-day artifact contains exactly two age-encrypted observations: the complete
 owned-zone DNS result and the source-bound account metadata, visible token rows,
