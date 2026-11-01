@@ -50,6 +50,10 @@ if [[ $url == */r2/buckets\?* && $FIXTURE_CASE == bucket-http-denied ]]; then
   [[ -z $output ]] || printf '403' >&3
   exit 22
 fi
+if [[ $url == */r2/buckets\?* && $FIXTURE_CASE == bucket-transport-failure ]]; then
+  [[ -z $output ]] || printf '000' >&3
+  exit 7
+fi
 case "$url" in
   'https://api.cloudflare.com/client/v4/zones?name=devantler.tech&per_page=50')
     jq -n '{success:true,result:[{id:"11111111111111111111111111111111",name:"devantler.tech",status:"active",account:{id:"22222222222222222222222222222222"}}],result_info:{total_count:1,total_pages:1}}' ;;
@@ -143,6 +147,7 @@ run_case() {
     bucket-missing-total) expected_reason=bucket-total; expected_http=200 ;;
     bucket-missing-page-size) expected_reason=bucket-page-size; expected_http=200 ;;
     bucket-status-private) expected_reason=provider-status; expected_http=none ;;
+    bucket-transport-failure) expected_reason=provider-transport; expected_http=none ;;
   esac
   if [[ -n $expected_reason ]]; then
     if ! grep -qx "INVENTORY_FAILURE=$expected_reason" "$case_dir/log" ||
@@ -157,7 +162,7 @@ run_case() {
 }
 run_case valid 0
 run_case multi-page 0
-for scenario in wrong-ref wrong-actor rerun disabled extra-recipient existing-output absent-token invalid-token policy-denied token-mismatch token-inactive token-short-page token-drift-total token-duplicate cursor-loop bucket-mismatch bucket-wrong-jurisdiction bucket-http-denied bucket-malformed-envelope bucket-missing-total bucket-missing-page-size bucket-status-private bad-lifecycle double-document encryption-failed; do
+for scenario in wrong-ref wrong-actor rerun disabled extra-recipient existing-output absent-token invalid-token policy-denied token-mismatch token-inactive token-short-page token-drift-total token-duplicate cursor-loop bucket-mismatch bucket-wrong-jurisdiction bucket-http-denied bucket-malformed-envelope bucket-missing-total bucket-missing-page-size bucket-status-private bucket-transport-failure bad-lifecycle double-document encryption-failed; do
   run_case "$scenario" 2
 done
 printf '%s\n' 'PASS: bounded bootstrap inventory and ciphertext-only refusals'

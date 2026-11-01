@@ -4,6 +4,7 @@ set +x
 set -euo pipefail
 umask 077
 scratch='' output_created=false stage=dispatch failure=validation http_status=none
+# Remove private scratch and refuse partial exports while reporting safe diagnostics.
 cleanup() {
   local rc=$?
   [[ -z "$scratch" ]] || rm -rf "$scratch"
@@ -57,14 +58,14 @@ read_cloudflare() {
       --max-redirs 0 --connect-timeout 10 --max-time 20 --max-filesize 8388608 \
       --header "cf-r2-jurisdiction: $jurisdiction" --silent --fail --url "$url" \
       --output "$scratch/http-response" --write-out '%{http_code}' 2>/dev/null); then
-    if [[ $observed_status =~ ^[0-9]{3}$ ]]; then
+    if [[ $observed_status =~ ^[1-5][0-9]{2}$ ]]; then
       http_status=$observed_status
       [[ $http_status =~ ^[45][0-9]{2}$ ]] && failure='provider-http'
     fi
     return 1
   fi
   failure='provider-status'
-  [[ $observed_status =~ ^[0-9]{3}$ ]] || return 1
+  [[ $observed_status =~ ^[1-5][0-9]{2}$ ]] || return 1
   http_status=$observed_status
   failure='provider-http'
   [[ $http_status =~ ^2[0-9]{2}$ ]] || return 1
