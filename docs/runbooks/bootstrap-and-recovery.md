@@ -188,12 +188,13 @@ an observation, never a generated empty prefix or desired rule change.
    system's stdin import, then confirm receipt by reading back each entry's name
    and version, never its value. A token that exists only in state is not
    delivered.
-10. Take the first encrypted recovery copy of state before migrating it: pipe
-    `tofu state pull` through encryption to the recovery key and store the
-    authenticated ciphertext with this repository's owner, independently of R2.
-    Its package must bind source revision, lineage, serial and the matching desired
-    variables; use the state recovery format below. The historical DNS package is
-    not a state backup.
+10. Before migrating state, capture `tofu state pull` into a private transient
+    file and convert the complete `production.auto.tfvars` from HCL to JSON using
+    the commands below. Pass both files to the state packaging helper, verify
+    authenticated recovery, then transfer the encrypted package to this
+    repository's approved recovery custody independently of R2. Remove the
+    caller-created plaintext capture files only after that permanent copy is
+    verified. The historical DNS observation is not a state backup.
     Refresh that copy after every apply, and do not enable apply automation
     until it refreshes the copy after each successful apply.
 11. Once the state bucket exists and has recovery access, remove the override and
@@ -280,11 +281,24 @@ The optional `recovery/state/` generation contains exactly `manifest.json`,
 DNS observation. The repository checker validates this directory when present
 and rejects additional plaintext files, symlinks and malformed packages.
 
-After a reviewed capture, prepare a new generation privately with:
+From the reviewed, initialized OpenTofu working directory, capture state and
+convert the current HCL variables in a private shell. These files may contain
+credentials; retain them only in the new private capture directory and keep
+command output there:
 
-```sh
+```bash
+set -euo pipefail
+umask 077
+cloudflare_capture="$(mktemp -d)"
+tofu state pull > "$cloudflare_capture/state.json" 2> "$cloudflare_capture/capture.err"
+tofu console -var-file=production.auto.tfvars \
+  > "$cloudflare_capture/variables.console.json" 2>> "$cloudflare_capture/capture.err" <<'TFVARS'
+jsonencode({ account_id = var.account_id, zone_name = var.zone_name, dns_records = var.dns_records, r2_buckets = var.r2_buckets, r2_lifecycle_rules = var.r2_lifecycle_rules, account_tokens = var.account_tokens })
+TFVARS
+jq -er 'select(type == "string") | fromjson | select(type == "object")' \
+  "$cloudflare_capture/variables.console.json" > "$cloudflare_capture/configuration.json"
 bash scripts/prepare-state-recovery-package.sh "$PWD" \
-  "$private_state_file" "$private_variables_json" "$new_private_package" \
+  "$cloudflare_capture/state.json" "$cloudflare_capture/configuration.json" "$new_private_package" \
   "$reviewed_commit" "$capture_run_id" "$capture_time_utc"
 ```
 
@@ -320,7 +334,14 @@ pair refuses recovery. Nothing is restored to an active backend by either mode.
 
 Publish a real encrypted generation only after its actual file-authentication
 check, trusted capture/source verification and review. Preserve the previous
-recoverable copy until a fresh checkout has passed the same check. A synthetic
+recoverable copy until a fresh checkout has passed the same check. After that
+transfer and verification, remove only the caller-created plaintext capture:
+
+```sh
+rm -rf "$cloudflare_capture"
+```
+
+Retain the authoritative backend state and previous verified generation. A synthetic
 test package is never an infrastructure recovery receipt. Recreating a clean
 environment, restoring the sole state lineage, proving lock contention and
 observing a clean provider plan are still separate required gates above. Never

@@ -75,7 +75,7 @@ for scenario in lineage serial digest duplicate extra-file symlink plaintext wro
   refuse bash "$repo_root/scripts/check-state-recovery-package.sh" "$scratch/root" "$scratch/$scenario" --identity-file "$scratch/identity"
 done
 # No malformed input may leave a partial ciphertext package behind.
-for scenario in bad-version fractional-serial empty-lineage duplicate-payload missing-configuration state-zone-mismatch state-account-mismatch missing-zone; do
+for scenario in bad-version fractional-serial empty-lineage duplicate-payload duplicate-nested-state duplicate-nested-configuration scalar-object-collision missing-configuration state-zone-mismatch state-account-mismatch missing-zone; do
   cp "$scratch/state.json" "$scratch/input.json"
   configuration="$scratch/config.json"
   case "$scenario" in
@@ -83,6 +83,9 @@ for scenario in bad-version fractional-serial empty-lineage duplicate-payload mi
     fractional-serial) jq '.serial=1.5' "$scratch/input.json" > "$scratch/update"; mv "$scratch/update" "$scratch/input.json" ;;
     empty-lineage) jq '.lineage=""' "$scratch/input.json" > "$scratch/update"; mv "$scratch/update" "$scratch/input.json" ;;
     duplicate-payload) { printf '{"serial":8,'; tail -c +2 "$scratch/input.json"; } > "$scratch/update"; mv "$scratch/update" "$scratch/input.json" ;;
+    duplicate-nested-state) { printf '{"outputs":{"shadow":{"value":"synthetic"}},'; tail -c +2 "$scratch/input.json"; } > "$scratch/update"; mv "$scratch/update" "$scratch/input.json" ;;
+    duplicate-nested-configuration) configuration="$scratch/duplicate-config.json"; { printf '{"dns_records":{"shadow":{"content":"synthetic"}},'; tail -c +2 "$scratch/config.json"; } > "$configuration" ;;
+    scalar-object-collision) { printf '{"outputs":0,'; tail -c +2 "$scratch/input.json"; } > "$scratch/update"; mv "$scratch/update" "$scratch/input.json" ;;
     missing-configuration) configuration="$scratch/not-present.json" ;;
     state-zone-mismatch) jq '.resources[0].instances[0].attributes.name="other.invalid"' "$scratch/input.json" > "$scratch/update"; mv "$scratch/update" "$scratch/input.json" ;;
     state-account-mismatch) jq '.resources[0].instances[0].attributes.account.id="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' "$scratch/input.json" > "$scratch/update"; mv "$scratch/update" "$scratch/input.json" ;;

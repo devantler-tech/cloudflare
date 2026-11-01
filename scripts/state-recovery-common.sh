@@ -3,7 +3,10 @@
 state_fail() { printf 'CLOUDFLARE_STATE_RECOVERY=UNVERIFIED stage=%s\n' "$1" >&2; exit 2; }
 state_hash() { local value; value=$(shasum -a 256 "$1" 2>/dev/null) || state_fail checksum; printf '%s' "${value%% *}"; }
 state_unique_json() {
-  jq --stream -s -e '[.[] | select(length == 2) | .[0]] as $paths | ($paths|length)==($paths|unique|length)' "$1" >/dev/null 2>&1 &&
+  # A stream's closing entry names the last child: its parent is the object or
+  # array just closed. Include that parent as well as leaves, otherwise two
+  # duplicate objects with disjoint children evade the duplicate-key check.
+  jq --stream -s -e '[.[] | if length == 2 then .[0] else .[0][:-1] end] as $paths | ($paths|length)==($paths|unique|length)' "$1" >/dev/null 2>&1 &&
     jq -s -e 'length==1 and (.[0]|type=="object")' "$1" >/dev/null 2>&1
 }
 state_payloads() {
