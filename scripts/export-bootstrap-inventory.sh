@@ -3,7 +3,8 @@
 set +x
 set -euo pipefail
 umask 077
-scratch='' output_created=false stage=dispatch
+scratch='' output_created=false stage=dispatch failure=validation http_status=none
+# Remove private scratch and refuse partial exports while reporting safe diagnostics.
 cleanup() {
   local rc=$?
   [[ -z "$scratch" ]] || rm -rf "$scratch"
@@ -14,6 +15,8 @@ cleanup() {
     fi
     printf '%s\n' 'BOOTSTRAP_INVENTORY=UNVERIFIED' 'MIGRATION_READINESS=UNVERIFIED' >&2
     printf 'INVENTORY_STAGE=%s\n' "$stage" >&2
+    printf 'INVENTORY_FAILURE=%s\n' "$failure" >&2
+    printf 'INVENTORY_HTTP_STATUS=%s\n' "$http_status" >&2
     exit 2
   fi
 }
@@ -47,15 +50,32 @@ CONFIRMATION=EXPORT_ENCRYPTED_DNS CLOUDFLARE_API_TOKEN="$provider_token" \
 
 # Fixed provider origin, GET only, no redirects/proxies/retries or credential argv.
 read_cloudflare() {
-  local url=$1 jurisdiction=${2:-default}
-  printf 'header = "Authorization: Bearer %s"\n' "$provider_token" |
+  local url=$1 jurisdiction=${2:-default} observed_status=''
+  failure='provider-transport'
+  http_status=none
+  if ! observed_status=$(printf 'header = "Authorization: Bearer %s"\n' "$provider_token" |
     curl --disable --config - --request GET --proto '=https' --noproxy '*' \
       --max-redirs 0 --connect-timeout 10 --max-time 20 --max-filesize 8388608 \
-      --header "cf-r2-jurisdiction: $jurisdiction" --silent --fail --url "$url" > "$scratch/http-response" 2>/dev/null || return 1
+      --header "cf-r2-jurisdiction: $jurisdiction" --silent --fail --url "$url" \
+      --output "$scratch/http-response" --write-out '%{http_code}' 2>/dev/null); then
+    if [[ $observed_status =~ ^[1-5][0-9]{2}$ ]]; then
+      http_status=$observed_status
+      [[ $http_status =~ ^[45][0-9]{2}$ ]] && failure='provider-http'
+    fi
+    return 1
+  fi
+  failure='provider-status'
+  [[ $observed_status =~ ^[1-5][0-9]{2}$ ]] || return 1
+  http_status=$observed_status
+  failure='provider-http'
+  [[ $http_status =~ ^2[0-9]{2}$ ]] || return 1
+  failure='provider-envelope'
   jq -s -e 'length == 1 and (.[0]|type == "object" and .success == true and
     (.errors == null or .errors == []))' "$scratch/http-response" >/dev/null 2>&1 || return 1
+  failure='provider-duplicate-json'
   jq --stream -s -e '[.[]|select(length == 2)|.[0]] as $paths |
     ($paths|length) == ($paths|unique|length)' "$scratch/http-response" >/dev/null 2>&1 || return 1
+  failure=validation
   cat "$scratch/http-response"
 }
 stage='zone-binding'
@@ -123,16 +143,25 @@ for jurisdiction in default eu us; do
     [[ -z "$cursor" ]] || url+="&cursor=$(jq -nr --arg cursor "$cursor" '$cursor|@uri')"
     response="$scratch/buckets-$jurisdiction-$page.json"
     read_cloudflare "$url" "$jurisdiction" > "$response" || stop
-    jq -e --arg jurisdiction "$jurisdiction" '.success == true and (.result.buckets|type) == "array" and
-      (.result_info.total_count|type) == "number" and
-      .result_info.total_count == (.result_info.total_count|floor) and
-      .result_info.total_count >= 0 and .result_info.total_count <= 100 and
-      .result_info.per_page == 1000 and (.result.buckets|length) <= 100 and
-      all(.result.buckets[]; (.name|type == "string" and test("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")) and
-        .jurisdiction == $jurisdiction and (.location|type == "string") and
-        (.storage_class == "Standard" or .storage_class == "InfrequentAccess")) and
-      (.result_info.cursor == null or (.result_info.cursor|type == "string" and length <= 2048))
-    ' "$response" >/dev/null 2>&1 || stop
+    failure='bucket-shape'
+    bucket_failure=$(jq -r --arg jurisdiction "$jurisdiction" '
+      if (.result.buckets|type) != "array" then "bucket-array"
+      elif (.result_info.total_count|type) != "number" then "bucket-total"
+      elif .result_info.total_count != (.result_info.total_count|floor) or
+        .result_info.total_count < 0 or .result_info.total_count > 100 then "bucket-total"
+      elif .result_info.per_page != 1000 or (.result.buckets|length) > 100 then "bucket-page-size"
+      elif any(.result.buckets[]; (.name|type != "string") or
+        (.name|test("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$")|not)) then "bucket-name"
+      elif any(.result.buckets[]; .jurisdiction != $jurisdiction) then "bucket-jurisdiction"
+      elif any(.result.buckets[]; (.location|type) != "string") then "bucket-location"
+      elif any(.result.buckets[]; .storage_class != "Standard" and
+        .storage_class != "InfrequentAccess") then "bucket-storage-class"
+      elif .result_info.cursor != null and
+        (.result_info.cursor|type != "string" or length > 2048) then "bucket-cursor"
+      else "none" end
+    ' "$response" 2>/dev/null) || stop
+    [[ $bucket_failure == none ]] || { failure=$bucket_failure; stop; }
+    failure=validation
     current_total=$(jq -r .result_info.total_count "$response")
     if ((expected == -1)); then expected=$current_total; else [[ $current_total == "$expected" ]] || stop; fi
     count=$((count+$(jq '.result.buckets|length' "$response")))
