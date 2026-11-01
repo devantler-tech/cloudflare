@@ -10,6 +10,7 @@ bash scripts/tests/test-cloudflare-connection.sh
 bash scripts/tests/test-dns-snapshot.sh
 bash scripts/tests/test-bootstrap-inventory.sh
 bash scripts/tests/test-recovery-package.sh
+bash scripts/tests/test-state-recovery-package.sh
 bash scripts/check-recovery-package.sh "$repo_root"
 tofu fmt -check -recursive
 tofu init -backend=false -input=false

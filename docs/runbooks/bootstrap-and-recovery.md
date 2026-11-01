@@ -191,8 +191,9 @@ an observation, never a generated empty prefix or desired rule change.
 10. Take the first encrypted recovery copy of state before migrating it: pipe
     `tofu state pull` through encryption to the recovery key and store the
     authenticated ciphertext with this repository's owner, independently of R2.
-    Its reviewed package format must bind source revision, lineage and serial;
-    the current historical DNS package is not a state backup.
+    Its package must bind source revision, lineage, serial and the matching desired
+    variables; use the state recovery format below. The historical DNS package is
+    not a state backup.
     Refresh that copy after every apply, and do not enable apply automation
     until it refreshes the copy after each successful apply.
 11. Once the state bucket exists and has recovery access, remove the override and
@@ -269,5 +270,57 @@ Active state still belongs in the independently accessible locked R2 backend.
 Its minimum authenticated encrypted recovery copy belongs with this owner,
 including source revision, lineage and serial bindings. That state format,
 publication path, actual lock-contention test and clean-environment recovery
-remain part of the first migration; the current package validator admits only
-the historical DNS package. No apply automation is enabled by this custody change.
+remain part of the first migration. No real state recovery package is currently
+retained, and no apply automation is enabled by the packaging helpers.
+
+### State recovery format
+
+The optional `recovery/state/` generation contains exactly `manifest.json`,
+`state.json.age` and `configuration.json.age`. It is separate from the historical
+DNS observation. The repository checker validates this directory when present
+and rejects additional plaintext files, symlinks and malformed packages.
+
+After a reviewed capture, prepare a new generation privately with:
+
+```sh
+bash scripts/prepare-state-recovery-package.sh "$PWD" \
+  "$private_state_file" "$private_variables_json" "$new_private_package" \
+  "$reviewed_commit" "$capture_run_id" "$capture_time_utc"
+```
+
+The inputs are an OpenTofu version-4 state and the JSON form of the complete
+`production.auto.tfvars` configuration. The canonical `cloudflare_zone.primary`
+in state must bind the same account and zone as those variables. Packaging
+freezes both input files, encrypts them to the existing infrastructure recipient
+and reserves a new destination; it never overwrites an existing generation,
+contacts a provider, imports, initializes a backend or applies anything. Private
+scratch is removed on exit. Keep input files in approved private custody.
+
+The public manifest binds capture time, reviewed source commit and capture run,
+state lineage and serial, account/zone hashes, and both plaintext and ciphertext
+digests. It contains no credential, account identifier, hostname or configuration
+value. These labels do not authenticate a capture's provenance: independently
+match its source and run against the actual reviewed pipeline before recovery.
+
+Validate structure without a key, then authenticate the files privately:
+
+```sh
+bash scripts/check-state-recovery-package.sh "$PWD" "$new_private_package"
+bash scripts/check-state-recovery-package.sh "$PWD" "$new_private_package" \
+  --identity-file "$independent_identity_file"
+```
+
+The identity must be an owned, regular, nonsymlink file with mode `0600`; its
+value is not copied, logged or supplied as a command argument. `CHECKED` verifies
+only public structure and ciphertext digests. `VERIFIED scope=authenticated-files`
+additionally proves authenticated decryption, plaintext digests, lineage/serial
+and the paired account/zone configuration. An unrelated identity or inconsistent
+pair refuses recovery. Nothing is restored to an active backend by either mode.
+
+Publish a real encrypted generation only after its actual file-authentication
+check, trusted capture/source verification and review. Preserve the previous
+recoverable copy until a fresh checkout has passed the same check. A synthetic
+test package is never an infrastructure recovery receipt. Recreating a clean
+environment, restoring the sole state lineage, proving lock contention and
+observing a clean provider plan are still separate required gates above. Never
+enable apply automation before the after-apply capture/publication path exists.
