@@ -122,6 +122,12 @@ API contracts: [account token listing](https://developers.cloudflare.com/api/res
 [bucket listing](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/methods/list/),
 and [bucket lifecycle reads](https://developers.cloudflare.com/api/resources/r2/subresources/buckets/subresources/lifecycle/methods/get/).
 
+The lifecycle response may omit its optional `rules` member. The encrypted
+observation preserves that omission; it is not an instruction to configure an
+empty rule list. A present `rules` value must be an array of valid, uniquely
+identified rules. Explicit nulls, malformed rules and missing required rule
+fields refuse the export with a fixed lifecycle failure category.
+
 ## First migration
 
 1. Inventory zones, records, buckets, lifecycle and lock settings, members, and

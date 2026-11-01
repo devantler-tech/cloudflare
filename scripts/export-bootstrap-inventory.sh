@@ -196,11 +196,22 @@ for jurisdiction in default eu us; do
     ' "$scratch/metadata.json" >/dev/null 2>&1 || stop
     stage='bucket-lifecycle'
     read_cloudflare "$base/r2/buckets/$bucket/lifecycle" "$jurisdiction" > "$scratch/lifecycle.json" || stop
-    jq -e '.success == true and (.result.rules|type == "array") and
-      all(.result.rules[]; (.id|type == "string" and length > 0 and length <= 255) and
-        (.enabled|type == "boolean") and (.conditions.prefix|type == "string")) and
-      ([.result.rules[].id]|length) == ([.result.rules[].id]|unique|length)
-    ' "$scratch/lifecycle.json" >/dev/null 2>&1 || stop
+    lifecycle_failure=$(jq -r '
+      # The API may omit rules. Preserve that observation without inventing
+      # an empty configured rule list; an explicitly malformed list is refused.
+      if (.result|type) != "object" then "lifecycle-object"
+      elif (.result|has("rules")) and (.result.rules|type) != "array" then "lifecycle-rules"
+      elif any((.result.rules // [])[]; type != "object") then "lifecycle-rule"
+      elif any((.result.rules // [])[]; (.id|type) != "string") then "lifecycle-rule-id"
+      elif any((.result.rules // [])[]; (.id|length) < 1 or (.id|length) > 255) then "lifecycle-rule-id"
+      elif any((.result.rules // [])[]; (.enabled|type) != "boolean") then "lifecycle-rule-enabled"
+      elif any((.result.rules // [])[]; (.conditions|type) != "object") then "lifecycle-rule-prefix"
+      elif any((.result.rules // [])[]; (.conditions.prefix|type) != "string") then "lifecycle-rule-prefix"
+      elif ([(.result.rules // [])[].id]|length) !=
+        ([(.result.rules // [])[].id]|unique|length) then "lifecycle-rule-duplicate"
+      else "none" end
+    ' "$scratch/lifecycle.json" 2>/dev/null) || stop
+    [[ $lifecycle_failure == none ]] || { failure=$lifecycle_failure; stop; }
     jq -n --arg jurisdiction "$jurisdiction" --slurpfile listed "$scratch/list-observation.json" \
       --slurpfile metadata "$scratch/metadata.json" --slurpfile lifecycle "$scratch/lifecycle.json" \
       '{requested_jurisdiction:$jurisdiction,list_observation:$listed[0],metadata:$metadata[0].result,lifecycle:$lifecycle[0].result}' > "$scratch/buckets/$jurisdiction-$bucket.json" 2>/dev/null || stop
