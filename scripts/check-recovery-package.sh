@@ -9,7 +9,13 @@ root=$1
 [[ -d "$root/recovery" && ! -L "$root/recovery" && -d "$root/.github" && ! -L "$root/.github" ]] || fail directory
 shopt -s dotglob nullglob
 files=("$root/recovery/"*)
-[[ ${#files[@]} == 2 ]] || fail inventory
+if [[ -e "$root/recovery/state" || -L "$root/recovery/state" ]]; then
+  [[ ${#files[@]} == 3 ]] || fail inventory
+  script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+  bash "$script_dir/check-state-recovery-package.sh" "$root" "$root/recovery/state" >/dev/null 2>&1 || fail state-package
+else
+  [[ ${#files[@]} == 2 ]] || fail inventory
+fi
 manifest="$root/recovery/manifest.json"
 ciphertext="$root/recovery/dns-snapshot.json.age"
 recipient_file="$root/.github/dns-recovery-recipient.txt"
