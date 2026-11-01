@@ -158,6 +158,13 @@ format, plus encrypted binary and JSON plans. `plan-manifest.json` binds their
 plaintext and ciphertext digests to that state generation, source revision and
 run. Tool output and decrypted files stay in transient private scratch.
 
+A failed proposal exports no successful plan package. After recipient validation,
+it may retain a separate one-day `encrypted-state-bootstrap-diagnostics` artifact
+containing an encrypted, bounded archive of the fixed provider observations and
+tool logs. Decrypt only in private custody and inspect its source/run and failure
+stage before reading the logs. This evidence is not an approved plan or a state
+recovery generation. Early dispatch or credential refusals collect nothing.
+
 Before approving an apply, download into private custody, verify the source/run
 against Actions, run `check-state-recovery-package.sh` with the independent
 identity, decrypt both plans privately, and check every manifest digest. Read

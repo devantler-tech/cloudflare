@@ -11,6 +11,16 @@ for file in main.tf variables.tf versions.tf providers.tf outputs.tf .terraform.
 done
 age-keygen -o "$scratch/key" 2>/dev/null
 age-keygen -y "$scratch/key" > "$scratch/root/.github/dns-recovery-recipient.txt"
+actual_shasum=$(command -v shasum)
+cat > "$scratch/bin/shasum" <<'HASH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $* == *'/migration.tfplan.json.age' ]]; then
+  if [[ $FIXTURE_CASE == hash-failed ]]; then exit 1; fi
+  if [[ $FIXTURE_CASE == hash-empty ]]; then printf '\n'; exit 0; fi
+fi
+exec "$FIXTURE_SHASUM" "$@"
+HASH
 cat > "$scratch/bin/curl" <<'CURL'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -90,8 +100,9 @@ case $1 in
   *) exit 83 ;;
 esac
 TOFU
-chmod +x "$scratch/bin/curl" "$scratch/bin/tofu"
+chmod +x "$scratch/bin/curl" "$scratch/bin/tofu" "$scratch/bin/shasum"
 jq -n '{format_version:"1.2",terraform_version:"1.12.6",resource_changes:[{address:"cloudflare_zone.primary",mode:"managed",type:"cloudflare_zone",change:{actions:["no-op"],before:{id:"11111111111111111111111111111111"},after:{id:"11111111111111111111111111111111"}}},{address:"cloudflare_r2_bucket.buckets[\"cloudflare-bootstrap-state\"]",mode:"managed",type:"cloudflare_r2_bucket",change:{actions:["create"],before:null,after:{account_id:"22222222222222222222222222222222",name:"cloudflare-bootstrap-state",jurisdiction:"default",storage_class:"Standard"}}}]}' > "$scratch/plan.json"
+# Exercise one successful or refused run and independently inspect its transport.
 run_case() {
   local scenario=$1 expected=$2 rc=0 ref=refs/heads/main confirmation=PLAN_STATE_BOOTSTRAP credential=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
   local case_dir="$scratch/$scenario"
@@ -99,11 +110,11 @@ run_case() {
   [[ $scenario != wrong-ref ]] || ref=refs/heads/feature
   [[ $scenario != wrong-confirmation ]] || confirmation=APPLY
   [[ $scenario != missing-credential ]] || credential=''
-  PATH="$scratch/bin:$PATH" FIXTURE_DIR="$case_dir" FIXTURE_CASE="$scenario" FIXTURE_PLAN="$scratch/plan.json" \
+  PATH="$scratch/bin:$PATH" FIXTURE_DIR="$case_dir" FIXTURE_CASE="$scenario" FIXTURE_PLAN="$scratch/plan.json" FIXTURE_SHASUM="$actual_shasum" \
     GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF="$ref" GITHUB_REPOSITORY=devantler-tech/cloudflare \
     GITHUB_ACTOR=devantler GITHUB_RUN_ATTEMPT=1 GITHUB_SHA=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa GITHUB_RUN_ID=12345 \
     CONFIRMATION="$confirmation" CLOUDFLARE_API_TOKEN="$credential" TF_LOG=TRACE TF_CLI_ARGS_plan=-destroy \
-    CLOUDFLARE_API_BASE_URL=https://untrusted.invalid OUTPUT_DIR="$case_dir/output" \
+    CLOUDFLARE_API_BASE_URL=https://untrusted.invalid OUTPUT_DIR="$case_dir/output" DIAGNOSTICS_DIR="$case_dir/diagnostics" \
     bash "$repo_root/scripts/plan-state-bootstrap.sh" "$scratch/root" > "$case_dir/result" 2>&1 || rc=$?
   if [[ $expected == success ]]; then
     [[ $rc == 0 ]] || { cat "$case_dir/result"; exit 1; }
@@ -115,10 +126,25 @@ run_case() {
     age --decrypt -i "$scratch/key" "$case_dir/output/migration.tfplan.age" > "$case_dir/plan" 2>/dev/null
     [[ $(cat "$case_dir/plan") == PRIVATE_FIXTURE_SAVED_PLAN ]]
     jq -e '.schemaVersion==1 and .kind=="cloudflare-state-bootstrap-plan" and .sourceRun==12345 and .sourceCommit=="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and .resourceCreates==1 and .resourceUpdates==0 and .resourceDeletes==0' "$case_dir/output/plan-manifest.json" >/dev/null
+    for pair in "stateManifestSha256:$case_dir/output/state/manifest.json" "binaryPlaintextSha256:$case_dir/plan" "binaryCiphertextSha256:$case_dir/output/migration.tfplan.age" "jsonPlaintextSha256:$case_dir/plan.json" "jsonCiphertextSha256:$case_dir/output/migration.tfplan.json.age"; do
+      expected_hash=$("$actual_shasum" -a 256 "${pair#*:}")
+      jq -e --arg field "${pair%%:*}" --arg expected "${expected_hash%% *}" '.[$field]==$expected' "$case_dir/output/plan-manifest.json" >/dev/null
+    done
     [[ $(wc -l < "$case_dir/calls") -eq 2 ]]
     [[ $(tr '\n' ' ' < "$case_dir/tofu-calls") == 'init import plan show state ' ]]
+    [[ ! -e $case_dir/diagnostics ]]
   else
     [[ $rc == 2 && ! -e $case_dir/output ]] || { cat "$case_dir/result"; exit 1; }
+    if [[ $scenario != wrong-ref && $scenario != wrong-confirmation && $scenario != missing-credential ]]; then
+      [[ -f $case_dir/diagnostics/diagnostics.tar.gz.age ]]
+      age --decrypt -i "$scratch/key" "$case_dir/diagnostics/diagnostics.tar.gz.age" > "$case_dir/diagnostics.tar.gz" 2>/dev/null
+      mkdir "$case_dir/decrypted-diagnostics"
+      tar -xzf "$case_dir/diagnostics.tar.gz" -C "$case_dir/decrypted-diagnostics"
+      jq -e '.schemaVersion==1 and .kind=="cloudflare-state-bootstrap-diagnostics" and .sourceRun==12345 and .exitCode==2 and (.stage|type=="string")' "$case_dir/decrypted-diagnostics/diagnostics-metadata.json" >/dev/null
+      if [[ $scenario == import-failed || $scenario == plan-failed ]]; then
+        grep -q PRIVATE_FIXTURE_PROVIDER_OUTPUT "$case_dir/decrypted-diagnostics/"*.log
+      fi
+    fi
   fi
   if grep -Eq 'PRIVATE_FIXTURE|AAAAAAAAAAAAAAAAAAAA|22222222222222222222222222222222|devantler.tech|untrusted.invalid' "$case_dir/result"; then
     printf 'FAIL: private fixture data reached the result\n' >&2
@@ -129,7 +155,7 @@ run_case() {
   fi
 }
 run_case good success
-for scenario in wrong-ref wrong-confirmation missing-credential wrong-zone duplicate-json bucket-present bucket-denied import-failed plan-failed wrong-state-account zone-update extra-resource delete wrong-plan-account wrong-bucket deferred errored; do
+for scenario in wrong-ref wrong-confirmation missing-credential wrong-zone duplicate-json bucket-present bucket-denied import-failed plan-failed wrong-state-account zone-update extra-resource delete wrong-plan-account wrong-bucket deferred errored hash-failed hash-empty; do
   run_case "$scenario" refused
 done
 printf '%s\n' 'PASS: read-only bootstrap plan, exact change boundary and native encrypted transport'
