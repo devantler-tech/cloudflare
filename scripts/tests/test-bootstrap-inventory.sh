@@ -129,6 +129,9 @@ case "$url" in
       elif $scenario=="lifecycle-null-result" then .result=null
       elif $scenario=="lifecycle-invalid-rule" then .result.rules=["PRIVATE_FIXTURE_INVALID_RULE"]
       elif $scenario=="lifecycle-missing-prefix" then del(.result.rules[0].conditions.prefix)
+      elif $scenario=="lifecycle-null-prefix" then .result.rules[0].conditions.prefix=null
+      elif $scenario=="lifecycle-numeric-prefix" then .result.rules[0].conditions.prefix=123
+      elif $scenario=="lifecycle-missing-conditions" then del(.result.rules[0].conditions)
       else . end' ;;
   *) exit 82 ;;
 esac
@@ -176,7 +179,7 @@ run_case() {
     grep -qx 'BOOTSTRAP_INVENTORY=ENCRYPTED_READS' "$case_dir/log"
     [[ $(find "$case_dir/out" -type f | wc -l) -eq 2 ]]
     age --decrypt -i "$scratch/key" "$case_dir/out/bootstrap-inventory.json.age" 2>/dev/null |
-      jq -e --arg scenario "$scenario" '.schema == 1 and .source_revision == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and .account_id == "22222222222222222222222222222222" and .token_inventory.coverage == "credential-visible-only" and (.buckets|length)==(if $scenario=="multi-page" then 2 elif $scenario=="many-pages" then 11 elif $scenario=="hundred-pages" then 100 else 1 end) and (.token_inventory.tokens|length)==(if $scenario=="multi-page" then 51 else 1 end) and any(.buckets[];.metadata.name=="fixture-bucket" and (if $scenario=="lifecycle-absent-rules" then .lifecycle=={} else .lifecycle.rules[0].conditions.prefix=="PRIVATE_FIXTURE_PREFIX" end))' >/dev/null
+      jq -e --arg scenario "$scenario" '.schema == 1 and .source_revision == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" and .account_id == "22222222222222222222222222222222" and .token_inventory.coverage == "credential-visible-only" and (.buckets|length)==(if $scenario=="multi-page" then 2 elif $scenario=="many-pages" then 11 elif $scenario=="hundred-pages" then 100 else 1 end) and (.token_inventory.tokens|length)==(if $scenario=="multi-page" then 51 else 1 end) and any(.buckets[];.metadata.name=="fixture-bucket" and (if $scenario=="lifecycle-absent-rules" then .lifecycle=={} elif $scenario=="lifecycle-missing-prefix" then .lifecycle.rules[0].conditions=={} else .lifecycle.rules[0].conditions.prefix=="PRIVATE_FIXTURE_PREFIX" end))' >/dev/null
     age --decrypt -i "$scratch/key" "$case_dir/out/dns-snapshot.json.age" 2>/dev/null |
       jq -e '.records[0].content == "PRIVATE_FIXTURE_DNS"' >/dev/null
     if [[ $scenario == bucket-optional-metadata ]]; then
@@ -204,7 +207,8 @@ run_case() {
     lifecycle-null-result) expected_reason=lifecycle-object; expected_http=200 ;;
     bad-lifecycle) expected_reason=lifecycle-rules; expected_http=200 ;;
     lifecycle-invalid-rule) expected_reason=lifecycle-rule; expected_http=200 ;;
-    lifecycle-missing-prefix) expected_reason=lifecycle-rule-prefix; expected_http=200 ;;
+    lifecycle-null-prefix|lifecycle-numeric-prefix) expected_reason=lifecycle-rule-prefix; expected_http=200 ;;
+    lifecycle-missing-conditions) expected_reason=lifecycle-rule-conditions; expected_http=200 ;;
     bucket-http-denied) expected_reason=provider-http; expected_http=403 ;;
     bucket-malformed-envelope) expected_reason=provider-envelope; expected_http=200 ;;
     bucket-missing-total) expected_reason=bucket-total; expected_http=200 ;;
@@ -226,6 +230,7 @@ run_case() {
 }
 run_case valid 0
 run_case lifecycle-absent-rules 0
+run_case lifecycle-missing-prefix 0
 run_case multi-page 0
 run_case bucket-clamped-page-size 0
 run_case bucket-missing-page-size 0
@@ -239,7 +244,7 @@ for scenario in wrong-ref wrong-actor rerun disabled extra-recipient existing-ou
   run_case "$scenario" 2
 done
 run_case page-budget 2
-for scenario in lifecycle-null-result lifecycle-invalid-rule lifecycle-missing-prefix; do
+for scenario in lifecycle-null-result lifecycle-invalid-rule lifecycle-null-prefix lifecycle-numeric-prefix lifecycle-missing-conditions; do
   run_case "$scenario" 2
 done
 printf '%s\n' 'PASS: bounded bootstrap inventory and ciphertext-only refusals'

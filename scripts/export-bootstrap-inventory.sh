@@ -205,8 +205,9 @@ for jurisdiction in default eu us; do
       elif any((.result.rules // [])[]; (.id|type) != "string") then "lifecycle-rule-id"
       elif any((.result.rules // [])[]; (.id|length) < 1 or (.id|length) > 255) then "lifecycle-rule-id"
       elif any((.result.rules // [])[]; (.enabled|type) != "boolean") then "lifecycle-rule-enabled"
-      elif any((.result.rules // [])[]; (.conditions|type) != "object") then "lifecycle-rule-prefix"
-      elif any((.result.rules // [])[]; (.conditions.prefix|type) != "string") then "lifecycle-rule-prefix"
+      elif any((.result.rules // [])[]; (.conditions|type) != "object") then "lifecycle-rule-conditions"
+      elif any((.result.rules // [])[]; (.conditions|has("prefix")) and
+        (.conditions.prefix|type) != "string") then "lifecycle-rule-prefix"
       elif ([(.result.rules // [])[].id]|length) !=
         ([(.result.rules // [])[].id]|unique|length) then "lifecycle-rule-duplicate"
       else "none" end
