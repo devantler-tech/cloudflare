@@ -128,6 +128,13 @@ empty rule list. A present `rules` value must be an array of valid, uniquely
 identified rules. Explicit nulls, malformed rules and missing required rule
 fields refuse the export with a fixed lifecycle failure category.
 
+Cloudflare's [pinned Wrangler lifecycle model](https://github.com/cloudflare/workers-sdk/blob/96c555434f99ce05954432d8edd511233f569ed4/packages/wrangler/src/r2/helpers/bucket.ts#L472-L490)
+permits the rule's prefix to be omitted, although the generated API reference
+describes it as required. The reader accepts and preserves an omitted prefix
+within a valid conditions object. A present prefix must be a string; explicit
+nulls and malformed or missing conditions objects remain refusals. Omission is
+an observation, never a generated empty prefix or desired rule change.
+
 ## First migration
 
 1. Inventory zones, records, buckets, lifecycle and lock settings, members, and
