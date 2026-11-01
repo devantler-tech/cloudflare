@@ -48,3 +48,25 @@ state_cipher() {
   [[ "$magic" == age-encryption.org/v1 && "$stanza" =~ ^'-> X25519 '[A-Za-z0-9+/]{43}$ && "$wrapped" =~ ^[A-Za-z0-9+/]{43}$ && "$mac" =~ ^'--- '[A-Za-z0-9+/]{43}$ ]] || state_fail ciphertext-format
   [[ $(state_hash "$file") == "$expected" ]] || state_fail checksum
 }
+
+# Stream exactly one native identity through an inherited pipe, never a new
+# key file, shell variable, environment variable or process argument.
+state_identity_stream() {
+  awk -v wanted="$2" '/^AGE-SECRET-KEY-1/ { n++; if (n==wanted) { print; found=1; exit } } END { if (!found) exit 1 }' "$1"
+}
+state_identity_index() {
+  local identity=$1 recipient=$2 scratch=$3 count index
+  [[ $(wc -c < "$identity") -le 65536 ]] || state_fail identity-store
+  # Refuse plugin/SSH/unknown formats before any identity tool can interpret
+  # them. Comments are not trusted as a key's public identity.
+  awk '/^[[:space:]]*#/ || /^[[:space:]]*$/ { next } /^AGE-SECRET-KEY-1[A-Z0-9]+$/ { n++; next } { bad=1 } END { if (bad || n<1 || n>32) exit 1 }' "$identity" || state_fail identity-store
+  age-keygen -y "$identity" > "$scratch/recipients" 2>/dev/null || state_fail identity-recipient
+  count=$(awk '/^AGE-SECRET-KEY-1/ { n++ } END { print n+0 }' "$identity")
+  [[ $(wc -l < "$scratch/recipients") -eq "$count" ]] || state_fail identity-store
+  index=$(awk -v wanted="$recipient" '$0==wanted { n++; position=NR } END { if (n==1) print position; else exit 1 }' "$scratch/recipients") || state_fail identity-recipient
+  # Re-derive the selected line's public identity rather than relying on input
+  # comments or assuming that an unrelated decrypting identity is acceptable.
+  age-keygen -y <(state_identity_stream "$identity" "$index") > "$scratch/selected-recipient" 2>/dev/null || state_fail identity-recipient
+  cmp -s "$scratch/selected-recipient" <(printf '%s\n' "$recipient") || state_fail identity-recipient
+  printf '%s' "$index"
+}

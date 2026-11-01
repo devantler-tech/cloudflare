@@ -60,6 +60,20 @@ for file in state configuration; do
   mv "$scratch/update" "$scratch/recipient-lie/manifest.json"
 done
 refuse bash "$repo_root/scripts/check-state-recovery-package.sh" "$scratch/root" "$scratch/recipient-lie" --identity-file "$scratch/wrong-identity"
+# Ordinary SOPS identity stores can hold several independent identities. Select
+# only the reviewed one, even when an unrelated key could decrypt a lying file.
+cat "$scratch/wrong-identity" "$scratch/identity" > "$scratch/multiple-identities"
+bash "$repo_root/scripts/check-state-recovery-package.sh" "$scratch/root" "$scratch/package" --identity-file "$scratch/multiple-identities" > "$scratch/result" 2>&1
+grep -qx 'CLOUDFLARE_STATE_RECOVERY=VERIFIED scope=authenticated-files' "$scratch/result"
+refuse bash "$repo_root/scripts/check-state-recovery-package.sh" "$scratch/root" "$scratch/recipient-lie" --identity-file "$scratch/multiple-identities"
+cat "$scratch/identity" "$scratch/wrong-identity" > "$scratch/reversed-identities"
+bash "$repo_root/scripts/check-state-recovery-package.sh" "$scratch/root" "$scratch/package" --identity-file "$scratch/reversed-identities" > "$scratch/result" 2>&1
+grep -qx 'CLOUDFLARE_STATE_RECOVERY=VERIFIED scope=authenticated-files' "$scratch/result"
+cat "$scratch/identity" "$scratch/identity" > "$scratch/duplicate-identities"
+refuse bash "$repo_root/scripts/check-state-recovery-package.sh" "$scratch/root" "$scratch/package" --identity-file "$scratch/duplicate-identities"
+cat "$scratch/identity" > "$scratch/unknown-identities"
+printf '%s\n' 'AGE-PLUGIN-UNTRUSTED-FIXTURE' >> "$scratch/unknown-identities"
+refuse bash "$repo_root/scripts/check-state-recovery-package.sh" "$scratch/root" "$scratch/package" --identity-file "$scratch/unknown-identities"
 for scenario in lineage serial digest duplicate extra-file symlink plaintext wrong-recipient; do
   cp -R "$scratch/package" "$scratch/$scenario"
   case "$scenario" in

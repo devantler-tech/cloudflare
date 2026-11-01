@@ -324,9 +324,12 @@ bash scripts/check-state-recovery-package.sh "$PWD" "$new_private_package" \
   --identity-file "$independent_identity_file"
 ```
 
-The identity must be an owned, regular, nonsymlink file with mode `0600`, holding
-only the native identity for the reviewed infrastructure recipient; its
-value is not copied, logged or supplied as a command argument. `CHECKED` verifies
+The identity store must be an owned, regular, nonsymlink file with mode `0600`.
+It may hold up to 32 native identities, including older SOPS identities. The
+checker derives their public identities and streams only the unique matching
+key through a private pipe; it ignores public-key comments and refuses unknown
+identity formats. No private key is copied to another file, logged, put in a
+shell/environment variable or supplied as a command argument. `CHECKED` verifies
 only public structure and ciphertext digests. `VERIFIED scope=authenticated-files`
 additionally proves authenticated decryption, plaintext digests, lineage/serial
 and the paired account/zone configuration. An unrelated identity or inconsistent

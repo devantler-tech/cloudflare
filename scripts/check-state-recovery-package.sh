@@ -44,12 +44,11 @@ esac
 private=$(mktemp -d)
 trap 'rm -rf "$private"' EXIT
 trap 'exit 2' INT TERM
-# A key that can decrypt a file might be an older or unrelated identity from
-# the same store. Bind the sole native public identity before decryption.
-age-keygen -y "$identity" > "$private/recipient" 2>/dev/null || state_fail identity-recipient
-cmp -s "$private/recipient" <(printf '%s\n' "$recipient") || state_fail identity-recipient
-age --decrypt -i "$identity" "$package/state.json.age" > "$private/state.json" 2>/dev/null || state_fail authentication
-age --decrypt -i "$identity" "$package/configuration.json.age" > "$private/configuration.json" 2>/dev/null || state_fail authentication
+# A SOPS file can contain older, unrelated identities. Select the sole matching
+# native key mathematically, and supply only that key to age through a pipe.
+identity_index=$(state_identity_index "$identity" "$recipient" "$private") || state_fail identity-recipient
+age --decrypt -i <(state_identity_stream "$identity" "$identity_index") "$package/state.json.age" > "$private/state.json" 2>/dev/null || state_fail authentication
+age --decrypt -i <(state_identity_stream "$identity" "$identity_index") "$package/configuration.json.age" > "$private/configuration.json" 2>/dev/null || state_fail authentication
 state_payloads "$private/state.json" "$private/configuration.json"
 [[ $(state_hash "$private/state.json") == "$(jq -er .statePlaintextSha256 "$manifest")" && $(state_hash "$private/configuration.json") == "$(jq -er .configurationPlaintextSha256 "$manifest")" ]] || state_fail payload-checksum
 [[ $(jq -er .lineage "$private/state.json") == "$(jq -er .lineage "$manifest")" && $(jq -er .serial "$private/state.json") == "$(jq -er .serial "$manifest")" ]] || state_fail state-binding
