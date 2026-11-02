@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "kind": "cloudflare-state-bootstrap-custody",
+  "sourceCommit": "58d5e58aca7395406de45b9b7125a1b28d18f83b",
+  "sourceRun": "41431272754",
+  "mode": "check",
+  "applyExitCode": 0,
+  "convergenceExitCode": 0
+}
