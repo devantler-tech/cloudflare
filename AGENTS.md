@@ -44,4 +44,9 @@ the clean and disposable failure fixtures locally.
   bucket destruction requires a separate, explicit change to that lifecycle
   boundary.
 - Run `scripts/test.sh` before every PR.
+- The confirmed main-only state-bootstrap workflow is a programmed data writer.
+  It owns `recovery/cloudflare-state-<run>` branches and immutable
+  `cloudflare-state-<run>-before` / `-result` tags. It writes only the registered
+  ciphertext package and its fixed custody receipt, never `main` or credentials.
+  Provider apply requires a successful custody check at that exact main revision.
 

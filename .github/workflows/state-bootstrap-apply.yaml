@@ -1,0 +1,91 @@
+name: State bootstrap (guarded apply and independent custody)
+
+"on":
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Check independent ciphertext publication before enabling the frozen provider apply
+        type: choice
+        options: [check, apply]
+        default: check
+        required: true
+      confirmation:
+        description: Type CHECK_STATE_CUSTODY for check, or APPLY_STATE_BOOTSTRAP for apply
+        type: string
+        required: true
+      custody_run:
+        description: Successful check run from this exact main revision (required for apply)
+        type: string
+        required: false
+
+permissions: {}
+concurrency:
+  group: cloudflare-bootstrap-migration
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    name: Bootstrap reviewed storage with independent recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write # Fixed ciphertext data commit and immutable recovery refs only.
+      actions: read # Authenticate the successful custody check at this same source.
+    steps:
+      - name: Require the confirmed first-attempt main dispatch
+        env:
+          BOOTSTRAP_MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != workflow_dispatch || "$GITHUB_REF" != refs/heads/main || "$GITHUB_REPOSITORY" != devantler-tech/cloudflare || "$GITHUB_ACTOR" != devantler || "$GITHUB_RUN_ATTEMPT" != 1 || "$RUNNER_ENVIRONMENT" != github-hosted || "$GITHUB_WORKFLOW_REF" != devantler-tech/cloudflare/.github/workflows/state-bootstrap-apply.yaml@refs/heads/main ]]; then
+            echo 'CLOUDFLARE_BOOTSTRAP_APPLY=UNVERIFIED stage=dispatch' >&2
+            exit 2
+          fi
+          if [[ ! ( "$BOOTSTRAP_MODE" == check && "$CONFIRMATION" == CHECK_STATE_CUSTODY ) && ! ( "$BOOTSTRAP_MODE" == apply && "$CONFIRMATION" == APPLY_STATE_BOOTSTRAP ) ]]; then exit 2; fi
+
+      - name: Check out the confirmed immutable source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Install the pinned OpenTofu CLI
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: 1.12.6
+          tofu_wrapper: false
+
+      - name: Install the pinned encryption tool
+        run: |
+          curl --disable --fail --silent --show-error --proto '=https' --location --max-redirs 3 --connect-timeout 10 --max-time 60 --output "$RUNNER_TEMP/age.tar.gz" https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz
+          printf '%s  %s\n' cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10 "$RUNNER_TEMP/age.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/age.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
+
+      - name: Validate custody or apply exactly the reviewed proposal
+        id: bootstrap
+        env:
+          BOOTSTRAP_MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          GH_TOKEN: ${{ github.token }}
+          CUSTODY_RUN: ${{ inputs.custody_run }}
+          CLOUDFLARE_API_TOKEN: ${{ inputs.mode == 'apply' && secrets.CLOUDFLARE_API_TOKEN || '' }}
+          CLOUDFLARE_BOOTSTRAP_APPROVED_DATA: ${{ inputs.mode == 'apply' && secrets.CLOUDFLARE_BOOTSTRAP_APPROVED_DATA || '' }}
+          OUTPUT_DIR: ${{ runner.temp }}/state-bootstrap-result
+        run: bash scripts/apply-state-bootstrap.sh "$GITHUB_WORKSPACE"
+
+      - name: Retain ciphertext if permanent publication or provider convergence fails
+        if: ${{ always() && steps.bootstrap.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: encrypted-state-bootstrap-result
+          path: |
+            ${{ runner.temp }}/state-bootstrap-result/state/manifest.json
+            ${{ runner.temp }}/state-bootstrap-result/state/state.json.age
+            ${{ runner.temp }}/state-bootstrap-result/state/configuration.json.age
+            ${{ runner.temp }}/state-bootstrap-result/diagnostics.tar.gz.age
+          if-no-files-found: warn # Early dispatch refusals have no private capture.
+          retention-days: 7
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false

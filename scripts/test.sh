@@ -13,6 +13,9 @@ bash scripts/tests/test-recovery-package.sh
 bash scripts/tests/test-state-recovery-package.sh
 bash scripts/tests/test-state-capture.sh
 bash scripts/tests/test-bootstrap-plan.sh
+bash scripts/tests/test-bootstrap-apply-input.sh
+bash scripts/tests/test-bootstrap-state-publication.sh
+bash scripts/tests/test-bootstrap-apply-lifecycle.sh
 bash scripts/check-recovery-package.sh "$repo_root"
 tofu fmt -check -recursive
 tofu init -backend=false -input=false
