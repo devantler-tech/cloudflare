@@ -30,8 +30,8 @@ account and no state backend.
 
 You need:
 
-- [OpenTofu](https://opentofu.org/docs/intro/install/) on the 1.12 line
-  (`versions.tf` requires `~> 1.12.0`; CI runs 1.12.6);
+- [OpenTofu](https://opentofu.org/docs/intro/install/) 1.12.6
+  (`versions.tf` allows 1.12.x; native recovery proofs use CI's exact runtime);
 - [ShellCheck](https://github.com/koalaman/shellcheck#installing), `jq`, and
   [age](https://github.com/FiloSottile/age) (`age` and `age-keygen` on `PATH`;
   CI verifies the pinned 1.3.2 release archive before using it);
@@ -121,6 +121,8 @@ using synthetic state in an isolated, run-specific prefix. It derives a
 15-minute scoped storage session from the existing account token, exports only
 encrypted evidence, and never opens the authoritative state key. The recovered
 configuration must match the reviewed encrypted generation before any API call.
+It first migrates local synthetic state with the native CLI, accepting only an
+empty destination; a non-empty destination or unexpected prompt is refused without forcing.
 This proof is a prerequisite to the separately guarded real-state migration;
 it does not enable general applies.
 
