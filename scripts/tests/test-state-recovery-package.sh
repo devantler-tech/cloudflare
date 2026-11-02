@@ -31,6 +31,14 @@ jq -n --arg recipient "$(age-keygen -y "$scratch/identity")" --arg digest "${dig
 cp -R "$scratch/package" "$scratch/root/recovery/state"
 bash "$repo_root/scripts/check-recovery-package.sh" "$scratch/root" > "$scratch/result" 2>&1
 grep -qx 'CLOUDFLARE_RECOVERY_PACKAGE=CHECKED format=age_v1 checksum=match' "$scratch/result"
+cp -R "$scratch/package" "$scratch/root/recovery/backend-source"
+bash "$repo_root/scripts/check-recovery-package.sh" "$scratch/root" > "$scratch/result" 2>&1
+grep -qx 'CLOUDFLARE_RECOVERY_PACKAGE=CHECKED format=age_v1 checksum=match' "$scratch/result"
+cp "$scratch/state.json" "$scratch/root/recovery/backend-source/plaintext.json"
+if bash "$repo_root/scripts/check-recovery-package.sh" "$scratch/root" > "$scratch/result" 2>&1; then
+  printf '%s\n' 'FAIL: backend source admitted plaintext' >&2; exit 1
+fi
+rm "$scratch/root/recovery/backend-source/plaintext.json"
 cp "$scratch/state.json" "$scratch/root/recovery/state/plaintext.json"
 if bash "$repo_root/scripts/check-recovery-package.sh" "$scratch/root" > "$scratch/result" 2>&1; then
   printf '%s\n' 'FAIL: retained state layout admitted plaintext' >&2; exit 1

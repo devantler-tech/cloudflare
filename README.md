@@ -102,9 +102,24 @@ encrypted files to their source and run. Verify authenticated recovery before
 using a generation, and refresh it after each reviewed apply. Provider convergence
 and remote backend locking have separate acceptance checks in the runbook.
 
+The independently authenticated post-apply generation in
+[`recovery/backend-source/`](recovery/backend-source/) retains the original
+imported lineage after creating the protected state bucket. The original
+`recovery/state/` generation remains available for the frozen first-apply path.
+Neither copy means the authoritative state has moved to R2.
+
+The confirmed `state-backend-proof` workflow tests native locking and recovery
+using synthetic state in an isolated, run-specific prefix. It derives a
+15-minute scoped storage session from the existing account token, exports only
+encrypted evidence, and never opens the authoritative state key. The recovered
+configuration must match the reviewed encrypted generation before any API call.
+This proof is a prerequisite to the separately guarded real-state migration;
+it does not enable general applies.
+
 In those procedures the provider reads `CLOUDFLARE_API_TOKEN`, and the state
 backend reads the standard `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
 variables. Keep all three out of shell history and plaintext repository files.
+Short-lived storage sessions also require `AWS_SESSION_TOKEN`.
 
 ## Dependency updates
 
