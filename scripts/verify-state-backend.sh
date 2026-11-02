@@ -110,12 +110,20 @@ skip_metadata_api_check = true
 skip_s3_checksum = true
 use_lockfile = true
 HCL
-stage=initialize
-native timeout 60 tofu -chdir="$scratch/first" init -input=false -no-color -backend-config="$scratch/backend.hcl" > "$scratch/evidence/init.log" 2>&1 || stop
+# Start with local synthetic state, using the same explicit override pattern
+# as the import-first production runbook. Its original S3 declaration remains.
+printf 'terraform {\n  backend "local" {}\n}\n' > "$scratch/first/backend_override.tf"
+stage=local-initialize
+native timeout 60 tofu -chdir="$scratch/first" init -input=false -no-color > "$scratch/evidence/local-init.log" 2>&1 || stop
 stage=synthetic-state
-native timeout 60 tofu -chdir="$scratch/first" apply -auto-approve -lock-timeout=0s -input=false -no-color > "$scratch/evidence/apply.log" 2>&1 || stop
+native timeout 60 tofu -chdir="$scratch/first" apply -auto-approve -lock-timeout=0s -input=false -no-color > "$scratch/evidence/local-apply.log" 2>&1 || stop
+native timeout 30 tofu -chdir="$scratch/first" state pull > "$scratch/evidence/migration-source.json" 2> "$scratch/evidence/local-pull.log" || stop
+rm "$scratch/first/backend_override.tf"
+stage=migrate
+native bash "$root/scripts/migrate-native-backend.sh" "$scratch/first" "$scratch/backend.hcl" "$scratch/evidence" > "$scratch/evidence/migration-proof.log" 2>&1 || stop
 native timeout 30 tofu -chdir="$scratch/first" state pull > "$scratch/evidence/before.json" 2> "$scratch/evidence/pull.log" || stop
 jq -e '.version==4 and (.resources|length)==0 and .outputs.proof.value=="synthetic-state-backend-v1" and (.lineage|type=="string" and length>0)' "$scratch/evidence/before.json" >/dev/null 2>&1 || stop
+jq -e --slurpfile source "$scratch/evidence/migration-source.json" '.serial>=$source[0].serial and (del(.serial))==($source[0]|del(.serial))' "$scratch/evidence/before.json" >/dev/null 2>&1 || stop
 stage=lock
 native bash "$root/scripts/prove-native-state-lock.sh" "$scratch/first" "$scratch/evidence" > "$scratch/evidence/lock.log" 2>&1 || stop
 stage=fresh-recovery
