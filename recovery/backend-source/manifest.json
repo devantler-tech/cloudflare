@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "kind": "cloudflare-state-recovery",
-  "capturedAt": "2026-11-02T14:56:16Z",
-  "sourceCommit": "58d5e58aca7395406de45b9b7125a1b28d18f83b",
-  "sourceRun": 41466246062,
+  "capturedAt": "2026-11-02T21:21:43Z",
+  "sourceCommit": "1628f233a82f2200e9cd07581b5ee8c755bac062",
+  "sourceRun": 41525197170,
   "recipient": "age1rk6fs67kly3h4zux5za429z3grjtvs8vcunav4sa28pxk738najsk8wgs6",
   "lineage": "d981e029-9986-63a7-2f54-379ce10ee6a4",
-  "serial": 2,
+  "serial": 3,
   "accountIdSha256": "3080d90d2ff8a5d38ec8c5dae7b9207b928b353c68f4dd81e0a378cf932a5f95",
   "zoneNameSha256": "1fc6c364e0d592421f88ba2d2cf6cf15691bbc711113d7907c159a638f35aeb0",
-  "stateCiphertextSha256": "037c17701d1db404d8f1809d74825ac95638424d523b88431b0541396f08660c",
-  "configurationCiphertextSha256": "d744299f064976994ffe9c6b4f0814da52f4b72d83a8947818ae12d419800461",
-  "statePlaintextSha256": "434e5def725284ef1df842413250d5fcedbcdd6848aaa8caae4e8e3f90215a93",
+  "stateCiphertextSha256": "a506974a068c67698d58ae273cd34e6e718cf6fddc7f3899cb70591053230e50",
+  "configurationCiphertextSha256": "cd9000b57fe7fcd3fc8035bf3c4ee0da23ddf0692bb1b2e8d731bb9a3380bd66",
+  "statePlaintextSha256": "029455c41771dbbdfa9c43807796df543fff5faedae690267053f582c43ea835",
   "configurationPlaintextSha256": "84c9b6ea504f82a9fd694e701287e30d54fe9b42ecf81dfccfbf2cba9873239a"
 }
