@@ -13,6 +13,40 @@ printf '%s\n' '{"version":4,"terraform_version":"1.12.6","serial":1,"lineage":"1
 printf '%s\n' '{"account_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","zone_name":"example.invalid","dns_records":{},"r2_buckets":{"cloudflare-bootstrap-state":{}},"r2_lifecycle_rules":{},"account_tokens":{}}' > "$scratch/configuration.json"
 bash "$root/scripts/prepare-state-recovery-package.sh" "$scratch/root" "$scratch/state.json" "$scratch/configuration.json" "$scratch/root/recovery/backend-source" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 123456789 2026-11-02T12:00:00Z >/dev/null
 backend_configuration "$scratch/root" "$scratch/configuration.json"
+# The migration boundary must authenticate exact captured bytes before creating
+# an output. This test fails if altered or noncanonical input can reach a backend.
+jq -Rsj '@base64' "$scratch/state.json" > "$scratch/state.base64"
+backend_migration_state "$scratch/root" "$scratch/configuration.json" "$scratch/accepted-state.json" < "$scratch/state.base64"
+cmp "$scratch/state.json" "$scratch/accepted-state.json"
+for scenario in changed-state malformed whitespace existing-output; do
+  target="$scratch/rejected-$scenario.json"
+  case "$scenario" in
+    changed-state) jq '.serial+=1' "$scratch/state.json" | jq -Rsj '@base64' > "$scratch/bad-state.base64" ;;
+    malformed) printf '%s' 'invalid-encoded-state!' > "$scratch/bad-state.base64" ;;
+    whitespace) cp "$scratch/state.base64" "$scratch/bad-state.base64"; printf '\n' >> "$scratch/bad-state.base64" ;;
+    existing-output) cp "$scratch/state.base64" "$scratch/bad-state.base64"; printf '%s\n' preserved > "$target" ;;
+  esac
+  if backend_migration_state "$scratch/root" "$scratch/configuration.json" "$target" < "$scratch/bad-state.base64"; then
+    printf 'FAIL: migration input admitted %s\n' "$scenario" >&2; exit 1
+  fi
+  if [[ $scenario == existing-output ]]; then
+    grep -qx preserved "$target"
+  else
+    [[ ! -e "$target" && ! -L "$target" ]]
+  fi
+done
+# A green run from another source, workflow or attempt cannot authorize writes.
+jq -n '{id:123456789,head_sha:("a"*40),head_branch:"main",event:"workflow_dispatch",path:".github/workflows/state-backend-proof.yaml",actor:{login:"devantler"},run_attempt:1,status:"completed",conclusion:"success"}' > "$scratch/proof-run.json"
+backend_proof_run "$scratch/proof-run.json" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 123456789 987654321
+for mutation in '.head_sha=("b"*40)' '.path=".github/workflows/other.yaml"' '.conclusion="failure"' '.run_attempt=2' '.actor.login="other"' '.id=111111111'; do
+  jq "$mutation" "$scratch/proof-run.json" > "$scratch/wrong-proof.json"
+  if backend_proof_run "$scratch/wrong-proof.json" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 123456789 987654321; then
+    printf '%s\n' 'FAIL: unrelated proof authorized migration' >&2; exit 1
+  fi
+done
+if backend_proof_run "$scratch/proof-run.json" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 123456789 123456789; then
+  printf '%s\n' 'FAIL: migration authenticated itself as its prerequisite' >&2; exit 1
+fi
 # gh secret set reads stdin with trailing CR/LF removed. The native capture
 # ends in LF, so both original and transported inputs must retain its exact hash.
 backend_configuration_input < "$scratch/configuration.json" > "$scratch/transport-original.json"

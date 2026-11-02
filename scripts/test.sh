@@ -20,6 +20,7 @@ bash scripts/tests/test-r2-backend-input.sh
 bash scripts/tests/test-native-state-lock.sh
 bash scripts/tests/test-native-state-migration.sh
 bash scripts/tests/test-state-backend-workflow.sh
+bash scripts/tests/test-state-migration-workflow.sh
 bash scripts/check-recovery-package.sh "$repo_root"
 tofu fmt -check -recursive
 tofu init -backend=false -input=false

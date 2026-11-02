@@ -126,6 +126,14 @@ empty destination; a non-empty destination or unexpected prompt is refused witho
 This proof is a prerequisite to the separately guarded real-state migration;
 it does not enable general applies.
 
+The separately confirmed `state-backend-migrate` workflow can then copy the
+authenticated frozen state into the empty production backend. It requires a
+successful synthetic proof from that exact main revision, refuses overwrites,
+and checks recovery on a separate GitHub-hosted runner. It performs no resource
+apply. Its encrypted recovery capture must be authenticated independently and
+retained in the repository before this migration is accepted or general applies
+are introduced; the expiring artifact alone is not permanent custody.
+
 In those procedures the provider reads `CLOUDFLARE_API_TOKEN`, and the state
 backend reads the standard `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
 variables. Keep all three out of shell history and plaintext repository files.
