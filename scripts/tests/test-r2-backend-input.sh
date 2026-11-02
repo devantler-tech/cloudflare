@@ -13,6 +13,17 @@ printf '%s\n' '{"version":4,"terraform_version":"1.12.6","serial":1,"lineage":"1
 printf '%s\n' '{"account_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","zone_name":"example.invalid","dns_records":{},"r2_buckets":{"cloudflare-bootstrap-state":{}},"r2_lifecycle_rules":{},"account_tokens":{}}' > "$scratch/configuration.json"
 bash "$root/scripts/prepare-state-recovery-package.sh" "$scratch/root" "$scratch/state.json" "$scratch/configuration.json" "$scratch/root/recovery/backend-source" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 123456789 2026-11-02T12:00:00Z >/dev/null
 backend_configuration "$scratch/root" "$scratch/configuration.json"
+# gh secret set reads stdin with trailing CR/LF removed. The native capture
+# ends in LF, so both original and transported inputs must retain its exact hash.
+backend_configuration_input < "$scratch/configuration.json" > "$scratch/transport-original.json"
+cmp "$scratch/configuration.json" "$scratch/transport-original.json"
+jq -Rsj 'rtrimstr("\n")' "$scratch/configuration.json" > "$scratch/transport-trimmed.json"
+backend_configuration_input < "$scratch/transport-trimmed.json" > "$scratch/transport-restored.json"
+cmp "$scratch/configuration.json" "$scratch/transport-restored.json"
+backend_configuration "$scratch/root" "$scratch/transport-restored.json"
+printf '\n' >> "$scratch/transport-restored.json"
+backend_configuration_input < "$scratch/transport-restored.json" > "$scratch/transport-extra-line.json"
+if backend_configuration "$scratch/root" "$scratch/transport-extra-line.json"; then printf '%s\n' 'FAIL: unrelated whitespace bypassed the full digest' >&2; exit 1; fi
 jq '.account_id="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"' "$scratch/configuration.json" > "$scratch/wrong-configuration.json"
 if backend_configuration "$scratch/root" "$scratch/wrong-configuration.json"; then printf '%s\n' 'FAIL: configuration digest mismatch was accepted' >&2; exit 1; fi
 ln -s "$scratch/configuration.json" "$scratch/linked-configuration.json"

@@ -2,6 +2,11 @@
 # Pure validation shared by the confirmed backend proof and its negative tests.
 # shellcheck source=scripts/state-recovery-common.sh
 source "$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/state-recovery-common.sh"
+# gh trims final line endings from stdin secrets. Restore only a missing native
+# JSON capture LF; authentication still requires the full reviewed byte digest.
+backend_configuration_input() {
+  jq -Rsje 'if endswith("\n") then . else . + "\n" end'
+}
 # Bind private configuration bytes to the reviewed encrypted capture before
 # deriving any provider account or backend destination from those values.
 backend_configuration() {
