@@ -1,0 +1,71 @@
+name: Independent state backend proof (synthetic only)
+
+"on":
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type VERIFY_STATE_BACKEND to test native locking and fresh-directory recovery of synthetic state
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-bootstrap-migration
+  cancel-in-progress: false
+
+jobs:
+  proof:
+    name: Prove isolated state locking and recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Require reviewed main, the approved operator and a first attempt
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ] || [ "$GITHUB_REF" != refs/heads/main ] || [ "$GITHUB_REPOSITORY" != devantler-tech/cloudflare ] || [ "$GITHUB_ACTOR" != devantler ] || [ "$GITHUB_RUN_ATTEMPT" != 1 ] || [ "$RUNNER_ENVIRONMENT" != github-hosted ] || [ "$CONFIRMATION" != VERIFY_STATE_BACKEND ]; then
+            echo 'CLOUDFLARE_STATE_BACKEND=UNVERIFIED stage=dispatch' >&2
+            exit 2
+          fi
+
+      - name: Check out the confirmed revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Install the pinned OpenTofu CLI
+        uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
+        with:
+          tofu_version: 1.12.6
+          tofu_wrapper: false
+
+      - name: Install the pinned encryption tool
+        run: |
+          curl --disable --fail --silent --show-error --proto '=https' --location --max-redirs 3 --connect-timeout 10 --max-time 60 --output "$RUNNER_TEMP/age.tar.gz" https://github.com/FiloSottile/age/releases/download/v1.3.2/age-v1.3.2-linux-amd64.tar.gz
+          printf '%s  %s\n' cbe24006683f8eb669266162894b9a522a1af52f2665fbc63a4bb032ed26ac10 "$RUNNER_TEMP/age.tar.gz" | sha256sum --check --status
+          tar -xzf "$RUNNER_TEMP/age.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
+
+      - name: Prove synthetic native state locking and recovery
+        id: proof
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_BOOTSTRAP_CONFIGURATION: ${{ secrets.CLOUDFLARE_BOOTSTRAP_CONFIGURATION }}
+          OUTPUT_DIR: ${{ runner.temp }}/state-backend-proof
+        run: bash scripts/verify-state-backend.sh "$GITHUB_WORKSPACE"
+
+      - name: Retain encrypted native evidence
+        if: ${{ always() && steps.proof.outcome != 'skipped' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: encrypted-state-backend-proof
+          path: ${{ runner.temp }}/state-backend-proof/evidence.tar.gz.age
+          if-no-files-found: warn # Dispatch/configuration refusals can precede capture.
+          retention-days: 1
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false

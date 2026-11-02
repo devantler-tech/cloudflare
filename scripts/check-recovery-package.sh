@@ -9,13 +9,17 @@ root=$1
 [[ -d "$root/recovery" && ! -L "$root/recovery" && -d "$root/.github" && ! -L "$root/.github" ]] || fail directory
 shopt -s dotglob nullglob
 files=("$root/recovery/"*)
+expected_files=2
+script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 if [[ -e "$root/recovery/state" || -L "$root/recovery/state" ]]; then
-  [[ ${#files[@]} == 3 ]] || fail inventory
-  script_dir=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
+  expected_files=$((expected_files + 1))
   bash "$script_dir/check-state-recovery-package.sh" "$root" "$root/recovery/state" >/dev/null 2>&1 || fail state-package
-else
-  [[ ${#files[@]} == 2 ]] || fail inventory
 fi
+if [[ -e "$root/recovery/backend-source" || -L "$root/recovery/backend-source" ]]; then
+  expected_files=$((expected_files + 1))
+  bash "$script_dir/check-state-recovery-package.sh" "$root" "$root/recovery/backend-source" >/dev/null 2>&1 || fail backend-package
+fi
+[[ ${#files[@]} == "$expected_files" ]] || fail inventory
 manifest="$root/recovery/manifest.json"
 ciphertext="$root/recovery/dns-snapshot.json.age"
 recipient_file="$root/.github/dns-recovery-recipient.txt"

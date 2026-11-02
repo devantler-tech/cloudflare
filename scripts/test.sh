@@ -16,6 +16,9 @@ bash scripts/tests/test-bootstrap-plan.sh
 bash scripts/tests/test-bootstrap-apply-input.sh
 bash scripts/tests/test-bootstrap-state-publication.sh
 bash scripts/tests/test-bootstrap-apply-lifecycle.sh
+bash scripts/tests/test-r2-backend-input.sh
+bash scripts/tests/test-native-state-lock.sh
+bash scripts/tests/test-state-backend-workflow.sh
 bash scripts/check-recovery-package.sh "$repo_root"
 tofu fmt -check -recursive
 tofu init -backend=false -input=false

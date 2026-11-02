@@ -446,3 +446,38 @@ test package is never an infrastructure recovery receipt. Recreating a clean
 environment, restoring the sole state lineage, proving lock contention and
 observing a clean provider plan are still separate required gates above. Never
 enable apply automation before the after-apply capture/publication path exists.
+
+## Isolated native backend prerequisite
+
+Before migrating the imported state, review and merge the dispatch-only
+`state-backend-proof.yaml` workflow. Store the privately authenticated
+`recovery/backend-source/` configuration as the approved Actions configuration
+secret `CLOUDFLARE_BOOTSTRAP_CONFIGURATION`, preserving its exact bytes. Its
+plaintext digest must match that reviewed generation; no independent recovery
+private key is uploaded to Actions. Ordinary provider access continues to use
+the existing `CLOUDFLARE_API_TOKEN`.
+
+Run the workflow once from `main` as the approved operator with confirmation
+`VERIFY_STATE_BACKEND`. It uses a GitHub-hosted runner and the common bootstrap
+serialization group. It requests a 15-minute, object-read-write R2 session
+restricted to its own synthetic prefix, without creating a long-lived token.
+The parent token is withheld from all OpenTofu children, and inherited AWS and
+OpenTofu configuration is excluded from their environment.
+
+The pinned native OpenTofu CLI initializes a synthetic module without provider
+resources, writes its state, then holds the real backend lock through its
+console while a second native plan must fail specifically on lock contention.
+The console releases normally; no force-unlock is used. A fresh directory then
+initializes using only HCL and short-lived credentials, pulls the same lineage,
+serial and contents, and produces a zero-change plan. The synthetic state is
+retained in its isolated run prefix as bounded diagnostic evidence. It is not
+an authoritative infrastructure state generation.
+
+Only `CLOUDFLARE_STATE_BACKEND=VERIFIED scope=synthetic-state` together with the
+native encrypted evidence accepts this prerequisite. Download and authenticate
+the encrypted archive with the independently held infrastructure identity.
+Credential responses and authorization headers are excluded from that archive.
+An early dispatch or configuration refusal may produce no archive. A failed
+run is not rerun: diagnose its recorded stage and native evidence before a new
+confirmed first attempt. This prerequisite alone neither migrates real state
+nor accepts production recovery or general provider applies.
