@@ -453,7 +453,9 @@ Before migrating the imported state, review and merge the dispatch-only
 `state-backend-proof.yaml` workflow. Store the privately authenticated
 `recovery/backend-source/` configuration as the approved Actions configuration
 secret `CLOUDFLARE_BOOTSTRAP_CONFIGURATION`, preserving its exact bytes. Its
-plaintext digest must match that reviewed generation; no independent recovery
+plaintext digest must match that reviewed generation. The input boundary restores
+the capture's single final LF if the secret-upload tool removed it, without
+changing other bytes or relaxing the digest check. No independent recovery
 private key is uploaded to Actions. Ordinary provider access continues to use
 the existing `CLOUDFLARE_API_TOKEN`.
 

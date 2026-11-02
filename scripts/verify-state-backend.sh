@@ -42,7 +42,7 @@ for tool in tofu timeout jq curl age tar; do command -v "$tool" >/dev/null 2>&1 
 scratch=$(mktemp -d)
 mkdir "$scratch/evidence" "$scratch/home" "$scratch/first" "$scratch/fresh"
 recipient=$(state_recipient "$root")
-printf '%s' "$CLOUDFLARE_BOOTSTRAP_CONFIGURATION" > "$scratch/configuration.json"
+printf '%s' "$CLOUDFLARE_BOOTSTRAP_CONFIGURATION" | backend_configuration_input > "$scratch/configuration.json" || stop
 unset CLOUDFLARE_BOOTSTRAP_CONFIGURATION
 backend_configuration "$root" "$scratch/configuration.json" || stop
 account=$(jq -er .account_id "$scratch/configuration.json")
