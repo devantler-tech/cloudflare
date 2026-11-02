@@ -131,7 +131,15 @@ jq -e --arg account "$account_id" --arg zone "$zone_id" '
 ' "$scratch/plan.json" >/dev/null 2>&1 || stop change-boundary
 provider_tofu state pull > "$scratch/state.json" 2> "$scratch/state.log" || stop state
 state_payloads "$scratch/state.json" "$scratch/work/production.auto.tfvars.json"
-jq -e --arg zone "$zone_id" '.resources|length==1 and .[0].type=="cloudflare_zone" and .[0].name=="primary" and .[0].mode=="managed" and .[0].instances[0].attributes.id==$zone' "$scratch/state.json" >/dev/null 2>&1 || stop state-boundary
+# Import keeps an entry with no instances for each declared for_each that is
+# empty. Those carry no object, so only the zone may hold one; anything else is HOLD.
+jq -e --arg zone "$zone_id" '
+  [.resources[]|select(.instances!=[])] as $populated |
+  all(.resources[]; .mode=="managed" and (has("module")|not)) and
+  ($populated|length==1) and $populated[0].type=="cloudflare_zone" and $populated[0].name=="primary" and
+  ($populated[0].instances|type=="array" and length==1) and $populated[0].instances[0].attributes.id==$zone and
+  ([.resources[]|select(.instances==[])|"\(.type).\(.name)"] - ["cloudflare_dns_record.records","cloudflare_r2_bucket.buckets","cloudflare_r2_bucket_lifecycle.rules","cloudflare_account_token.tokens"]|length==0)
+' "$scratch/state.json" >/dev/null 2>&1 || stop state-boundary
 unset provider_token account_id zone_id
 
 # Only ciphertext and non-sensitive binding metadata leave the private workspace.
