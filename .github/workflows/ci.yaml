@@ -123,11 +123,13 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     needs: [validate, retired-repo-links]
-    permissions: {}
+    permissions:
+      actions: read
     steps:
       - name: ✅ Aggregate job checks
-        uses: devantler-tech/.github/actions/aggregate-job-checks@bd24a3e1bbbf6aba2d7afd58a2fd8a3d67bebe6b # v19.0.3
+        uses: devantler-tech/.github/actions/aggregate-job-checks@da5f0839b418626a8a0b69df1f04ba931a38e371 # v19.1.0
         with:
+          check-workflow-startup: "true"
           job-results: >-
             ${{ needs.validate.result }}
             ${{ needs.retired-repo-links.result }}
