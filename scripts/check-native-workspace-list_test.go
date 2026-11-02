@@ -12,6 +12,7 @@ func TestWorkspaceListingRefusesIncompleteOrAmbiguousEvidence(t *testing.T) {
 		want      bool
 	}{
 		{"empty", valid, true},
+		{"namespaced-response", `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Name>state-fixture</Name><Prefix>proof/workspaces/</Prefix><KeyCount>0</KeyCount><MaxKeys>1000</MaxKeys><IsTruncated>false</IsTruncated></ListBucketResult>`, true},
 		{"truncated", strings.Replace(valid, "false", "true", 1), false},
 		{"wrong-bucket", strings.Replace(valid, "state-fixture", "different", 1), false},
 		{"wrong-prefix", strings.Replace(valid, "proof/workspaces/", "different/", 1), false},

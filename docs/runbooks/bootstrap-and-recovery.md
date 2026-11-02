@@ -510,7 +510,9 @@ XML validator requires the matching bucket and prefix, one explicit untruncated
 result, no continuation and no objects. This compensates for the native
 backend's compatibility behavior that hides denied workspace listings.
 Credentials reach the signer only through an inherited input pipe, and the
-response and numeric status remain in encrypted evidence. Go and curl with
+numeric status remains in encrypted evidence. Raw responses stay outside that
+evidence until success, complete validation and a credential-echo check pass.
+Go and curl with
 AWS V4 signing are required on the runner. The local S3 protocol fixture tests
 the actual CLI's state behavior; only the independent real R2 trial accepts
 provider behavior and credential scoping.

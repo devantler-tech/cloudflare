@@ -28,6 +28,7 @@ type objectStore struct {
 	denyStateRead  bool
 	denyList       bool
 	incompleteList bool
+	echoAuth       bool
 	injectOnUnlock []byte
 }
 
@@ -38,7 +39,7 @@ func (s *objectStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if s.denyList || (s.incompleteList && r.URL.Query().Get("continuation-token") != "") {
 			w.Header().Set("Content-Type", "application/xml")
 			w.WriteHeader(http.StatusForbidden)
-			_, _ = io.WriteString(w, "<Error><Code>AccessDenied</Code></Error>")
+			_, _ = io.WriteString(w, "<Error><Code>AccessDenied</Code><RequestEcho>SYNTHETIC_FIXTURE_SESSION</RequestEcho></Error>")
 			return
 		}
 		type entry struct {
@@ -51,10 +52,14 @@ func (s *objectStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			IsTruncated           bool     `xml:"IsTruncated"`
 			NextContinuationToken string   `xml:"NextContinuationToken,omitempty"`
 			Contents              []entry  `xml:"Contents"`
+			RequestEcho           string   `xml:"RequestEcho,omitempty"`
 		}{}
 		prefix := r.URL.Query().Get("prefix")
 		result.Name = "state-fixture"
 		result.Prefix = prefix
+		if s.echoAuth {
+			result.RequestEcho = "SYNTHETIC_FIXTURE_SESSION"
+		}
 		if s.incompleteList {
 			result.IsTruncated = true
 			result.NextContinuationToken = "unavailable"
@@ -124,7 +129,7 @@ func (s *objectStore) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func TestNativeS3MigrationPreservesLineage(t *testing.T) {
 	cache := t.TempDir()
-	for _, scenario := range []string{"absent", "initialized-empty", "occupied-default", "occupied-named", "competing-writer", "read-denied", "list-denied", "list-truncated"} {
+	for _, scenario := range []string{"absent", "initialized-empty", "occupied-default", "occupied-named", "competing-writer", "read-denied", "list-denied", "list-truncated", "list-echo"} {
 		t.Run(scenario, func(t *testing.T) { testNativeMigration(t, scenario, cache) })
 	}
 }
@@ -205,20 +210,31 @@ func testNativeMigration(t *testing.T, scenario, cache string) {
 		store.denyList = true
 	case "list-truncated":
 		store.incompleteList = true
+	case "list-echo":
+		store.echoAuth = true
 	}
 	if err := os.Remove(filepath.Join(module, "backend_override.tf")); err != nil {
 		t.Fatal(err)
 	}
 	backend := filepath.Join(work, "backend.hcl")
 	write(backend, fmt.Sprintf("bucket=\"state-fixture\"\nkey=\"proof/state.tfstate\"\nworkspace_key_prefix=\"proof/workspaces\"\nregion=\"auto\"\nendpoints={s3=%q}\nuse_path_style=true\nskip_credentials_validation=true\nskip_region_validation=true\nskip_requesting_account_id=true\nskip_metadata_api_check=true\nskip_s3_checksum=true\nuse_lockfile=true\n", server.URL))
-	if scenario == "occupied-default" || scenario == "occupied-named" || scenario == "competing-writer" || scenario == "read-denied" || scenario == "list-denied" || scenario == "list-truncated" {
+	if scenario == "occupied-default" || scenario == "occupied-named" || scenario == "competing-writer" || scenario == "read-denied" || scenario == "list-denied" || scenario == "list-truncated" || scenario == "list-echo" {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, "bash", filepath.Join(repo, "scripts/migrate-native-backend.sh"), module, backend, logs)
 		cmd.Env = env
 		output, err := cmd.CombinedOutput()
+		wantStage := map[string]string{
+			"occupied-default": "destination-state",
+			"occupied-named":   "listing-validation",
+			"competing-writer": "empty-initialize",
+			"read-denied":      "destination-initialize", // The pinned probe init refreshes state first.
+			"list-denied":      "destination-listing",
+			"list-truncated":   "listing-validation",
+			"list-echo":        "listing-confidentiality",
+		}[scenario]
 		exit, ok := err.(*exec.ExitError)
-		if !ok || exit.ExitCode() != 2 || !bytes.Contains(output, []byte("NATIVE_STATE_MIGRATION=UNVERIFIED")) {
+		if !ok || exit.ExitCode() != 2 || !bytes.Contains(output, []byte("NATIVE_STATE_MIGRATION=UNVERIFIED stage="+wantStage+"\n")) {
 			t.Fatalf("unsafe destination was not refused: %v\n%s", err, output)
 		}
 		unchanged, err := os.ReadFile(filepath.Join(module, "terraform.tfstate"))
@@ -230,11 +246,22 @@ func testNativeMigration(t *testing.T, scenario, cache string) {
 		if len(store.stateWrites) != 0 {
 			t.Fatal("refused migration wrote remote state")
 		}
+		if scenario == "competing-writer" {
+			failure, readErr := os.ReadFile(filepath.Join(logs, "seed-apply.log"))
+			if readErr != nil || !bytes.Contains(failure, []byte("Error:")) || !bytes.Contains(failure, []byte("Saved plan")) {
+				t.Fatal("competing writer was not refused by the native saved-plan guard")
+			}
+		}
+		if scenario == "list-denied" || scenario == "list-echo" {
+			if raw, readErr := os.ReadFile(filepath.Join(logs, "destination-list.xml")); readErr == nil && bytes.Contains(raw, []byte("SYNTHETIC_FIXTURE_SESSION")) {
+				t.Fatal("failed listing retained an authentication echo in evidence")
+			}
+		}
 		key := "proof/state.tfstate"
 		if scenario == "occupied-named" {
 			key = "proof/workspaces/retained/proof/state.tfstate"
 		}
-		if scenario != "read-denied" && scenario != "list-denied" && scenario != "list-truncated" && !bytes.Equal(store.objects[key], before) {
+		if scenario != "read-denied" && scenario != "list-denied" && scenario != "list-truncated" && scenario != "list-echo" && !bytes.Equal(store.objects[key], before) {
 			t.Fatal("refused migration changed occupied state")
 		}
 		return
