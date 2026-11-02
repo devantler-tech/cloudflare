@@ -35,7 +35,7 @@ You need:
 - [ShellCheck](https://github.com/koalaman/shellcheck#installing), `jq`, and
   [age](https://github.com/FiloSottile/age) (`age` and `age-keygen` on `PATH`;
   CI verifies the pinned 1.3.2 release archive before using it);
-- Bash 5 or newer as `bash` on `PATH`, and GNU coreutils `timeout`; and
+- Bash 5 or newer as `bash` on `PATH`, GNU coreutils `timeout`, Go, and curl with AWS V4 signing support; and
 - network access to `registry.opentofu.org` and to GitHub's release downloads,
   where OpenTofu fetches the pinned Cloudflare provider on the first run.
 
@@ -123,6 +123,10 @@ encrypted evidence, and never opens the authoritative state key. The recovered
 configuration must match the reviewed encrypted generation before any API call.
 It first migrates local synthetic state with the native CLI, accepting only an
 empty destination; a non-empty destination or unexpected prompt is refused without forcing.
+An absent S3 destination is first initialized with a saved, provider-free,
+zero-change native plan so the pinned CLI retains imported lineage on its first
+write. A successful complete listing is required before trusting the native
+workspace census; denied, truncated or ambiguous responses refuse the handoff.
 This proof is a prerequisite to the separately guarded real-state migration;
 it does not enable general applies.
 

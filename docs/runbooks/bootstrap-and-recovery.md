@@ -495,11 +495,31 @@ run is not rerun: diagnose its recorded stage and native evidence before a new
 confirmed first attempt. This prerequisite alone neither migrates real state
 nor accepts production recovery or general provider applies.
 
+The pinned remote state manager resets imported metadata when its first
+persistence refreshes an absent destination. The migration helper therefore
+initializes only a verified empty S3 destination using a separate module with
+no providers, resources or outputs. Its saved native plan must report zero
+changes and empty prior/planned values before it can be applied. The native
+saved-plan identity and locking refuse a competing state written between plan
+and apply. No state metadata is hand-edited, and the original lineage and
+nondecreasing serial remain mandatory after migration.
+
+Before each native workspace census, curl's native AWS V4 signer requires a
+successful listing of the exact workspace prefix. A bounded standard-library
+XML validator requires the matching bucket and prefix, one explicit untruncated
+result, no continuation and no objects. This compensates for the native
+backend's compatibility behavior that hides denied workspace listings.
+Credentials reach the signer only through an inherited input pipe, and the
+response and numeric status remain in encrypted evidence. Go and curl with
+AWS V4 signing are required on the runner. The local S3 protocol fixture tests
+the actual CLI's state behavior; only the independent real R2 trial accepts
+provider behavior and credential scoping.
+
 ## Guarded production-state migration
 
 The separately reviewed `state-backend-migrate.yaml` workflow performs only the
-native backend copy and read-only provider checks. It never imports resources,
-applies a plan, forces a copy, overwrites occupied state, or enables general
+native backend initialization/copy and read-only provider checks. It never imports resources,
+applies a provider-resource change, forces a copy, overwrites occupied state, or enables general
 applies. Keep the original authenticated recovery generation throughout.
 
 1. At the exact reviewed `main` revision, complete a first-attempt synthetic

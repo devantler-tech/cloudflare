@@ -121,6 +121,7 @@ native timeout 30 tofu -chdir="$scratch/first" state pull > "$scratch/evidence/m
 rm "$scratch/first/backend_override.tf"
 stage=migrate
 native bash "$root/scripts/migrate-native-backend.sh" "$scratch/first" "$scratch/backend.hcl" "$scratch/evidence" > "$scratch/evidence/migration-proof.log" 2>&1 || stop
+stage=migration-preservation
 native timeout 30 tofu -chdir="$scratch/first" state pull > "$scratch/evidence/before.json" 2> "$scratch/evidence/pull.log" || stop
 jq -e '.version==4 and (.resources|length)==0 and .outputs.proof.value=="synthetic-state-backend-v1" and (.lineage|type=="string" and length>0)' "$scratch/evidence/before.json" >/dev/null 2>&1 || stop
 jq -e --slurpfile source "$scratch/evidence/migration-source.json" '.serial>=$source[0].serial and (del(.serial))==($source[0]|del(.serial))' "$scratch/evidence/before.json" >/dev/null 2>&1 || stop
