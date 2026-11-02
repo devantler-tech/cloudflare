@@ -81,7 +81,20 @@ case $1 in
   state)
     [[ $2 == pull ]]
     # State output is data, not a log.
-    jq -n --arg scenario "$FIXTURE_CASE" '{version:4,terraform_version:"1.12.6",serial:1,lineage:"12345678-1234-1234-1234-123456789abc",outputs:{},resources:[{mode:"managed",type:"cloudflare_zone",name:"primary",provider:"provider[\"registry.opentofu.org/cloudflare/cloudflare\"]",instances:[{attributes:{id:"11111111111111111111111111111111",name:"devantler.tech",account:{id:(if $scenario=="wrong-state-account" then "33333333333333333333333333333333" else "22222222222222222222222222222222" end)}}}]}]}'
+    # A real import keeps an entry without instances for each empty for_each.
+    jq -n --arg scenario "$FIXTURE_CASE" '
+      def empty_entry($type; $name): {mode:"managed",type:$type,name:$name,provider:"provider[\"registry.opentofu.org/cloudflare/cloudflare\"]",instances:[]};
+      {version:4,terraform_version:"1.12.6",serial:1,lineage:"12345678-1234-1234-1234-123456789abc",outputs:{},resources:[{mode:"managed",type:"cloudflare_zone",name:"primary",provider:"provider[\"registry.opentofu.org/cloudflare/cloudflare\"]",instances:[{attributes:{id:"11111111111111111111111111111111",name:"devantler.tech",account:{id:(if $scenario=="wrong-state-account" then "33333333333333333333333333333333" else "22222222222222222222222222222222" end)}}}]},
+        empty_entry("cloudflare_dns_record";"records"),empty_entry("cloudflare_r2_bucket";"buckets"),empty_entry("cloudflare_r2_bucket_lifecycle";"rules"),empty_entry("cloudflare_account_token";"tokens")]} |
+      if $scenario=="zone-only" then .resources|=[.[0]]
+      elif $scenario=="state-undeclared-entry" then .resources+=[empty_entry("cloudflare_workers_script";"records")]
+      elif $scenario=="state-data-entry" then .resources[1].mode="data"
+      elif $scenario=="state-module-entry" then .resources[1].module="module.other"
+      elif $scenario=="state-missing-instances" then .resources[1]|=del(.instances)
+      elif $scenario=="state-populated-record" then .resources[1].instances=[{attributes:{id:"unowned"}}]
+      elif $scenario=="state-zone-instances" then .resources[0].instances+=[.resources[0].instances[0]]
+      elif $scenario=="state-wrong-zone-id" then .resources[0].instances[0].attributes.id="99999999999999999999999999999999"
+      else . end'
     ;;
   plan)
     [[ $FIXTURE_CASE != plan-failed ]]
@@ -135,6 +148,10 @@ run_case() {
     [[ ! -e $case_dir/diagnostics ]]
   else
     [[ $rc == 2 && ! -e $case_dir/output ]] || { cat "$case_dir/result"; exit 1; }
+    case $scenario in
+      state-zone-instances) grep -q 'stage=configuration-binding' "$case_dir/result" ;;
+      state-*) grep -q 'stage=state-boundary' "$case_dir/result" ;;
+    esac
     if [[ $scenario != wrong-ref && $scenario != wrong-confirmation && $scenario != missing-credential ]]; then
       [[ -f $case_dir/diagnostics/diagnostics.tar.gz.age ]]
       age --decrypt -i "$scratch/key" "$case_dir/diagnostics/diagnostics.tar.gz.age" > "$case_dir/diagnostics.tar.gz" 2>/dev/null
@@ -155,7 +172,8 @@ run_case() {
   fi
 }
 run_case good success
-for scenario in wrong-ref wrong-confirmation missing-credential wrong-zone duplicate-json bucket-present bucket-denied import-failed plan-failed wrong-state-account zone-update extra-resource delete wrong-plan-account wrong-bucket deferred errored hash-failed hash-empty; do
+run_case zone-only success
+for scenario in wrong-ref wrong-confirmation missing-credential wrong-zone duplicate-json bucket-present bucket-denied import-failed plan-failed wrong-state-account state-undeclared-entry state-data-entry state-module-entry state-missing-instances state-populated-record state-zone-instances state-wrong-zone-id zone-update extra-resource delete wrong-plan-account wrong-bucket deferred errored hash-failed hash-empty; do
   run_case "$scenario" refused
 done
 printf '%s\n' 'PASS: read-only bootstrap plan, exact change boundary and native encrypted transport'
