@@ -20,8 +20,8 @@ reviewed here or in `platform`, according to where the resource runs.
 
 It is configuration for one organization's account, not a reusable module. You
 can read it, check it locally and propose changes without any Cloudflare
-access. You cannot deploy anything with it: applying is a maintainer operation,
-and no apply automation is enabled yet (see [Safety state](#safety-state)).
+access. Privileged changes use the confirmed main-only bootstrap workflow;
+these local checks grant no deployment access (see [Safety state](#safety-state)).
 
 ## Check the configuration locally
 
@@ -74,9 +74,11 @@ the local checks, and what a pull request needs before it can merge.
 
 ## Safety state
 
-The configuration is deliberately import-first. No apply automation is enabled
-until the production inventory has been imported and a reviewed plan reports
-zero deletes and zero replacements.
+The configuration is deliberately import-first. The manual state-bootstrap
+workflow defaults to checking independent encrypted recovery publication. Its
+apply mode accepts only the frozen, reviewed first proposal and requires a
+successful custody check from that same main revision. General applies remain
+disabled until inventory, imports, remote locking and recovery pass their gates.
 
 The ownership decision and dependency boundary are recorded in
 [`docs/adr/0001-cluster-independent-cloudflare-owner.md`](docs/adr/0001-cluster-independent-cloudflare-owner.md).

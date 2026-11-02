@@ -176,6 +176,60 @@ preserved when preparing its reviewed apply; do not initialize a second lineage
 or silently regenerate the approved plan. Apply and state migration remain
 separate gated work below.
 
+### Guarded first apply and independent recovery publication
+
+The **State bootstrap (guarded apply and independent custody)** workflow is
+manual, main-only, first-attempt-only and serialized with the bootstrap plan.
+It does not activate the remote backend or adopt DNS records. General applies
+remain disabled. Never rerun a failed invocation: inspect its retained evidence
+and establish the actual provider/state outcome before a new confirmed run.
+
+First run `mode=check`, `confirmation=CHECK_STATE_CUSTODY`. It uses no provider
+credential or plaintext state. The existing Actions token publishes only the
+retained ciphertext package and a custody receipt. GitHub's native
+[commit API](https://docs.github.com/en/graphql/reference/commits#createcommitonbranch)
+signs the data commit; the driver checks its signature, parent and exact remote
+file bytes. Immutable `cloudflare-state-<run>-before` and `-result` tags retain
+the generation independently of both the cluster and branch cleanup. The
+programmed data branch is `recovery/cloudflare-state-<run>`. Nothing writes main.
+
+The approved proposal metadata is `.github/bootstrap-plan-approval.json`. After
+authenticating the original encrypted plan package privately, prepare a JSON
+envelope with exactly four base64 strings: `state`, `configuration`, `plan` and
+`planJson`. These are respectively the verified imported state, complete JSON
+variables, saved binary plan and its original JSON rendering. Keep the envelope
+in private custody, below 48 KiB, and save it as the protected Actions DATA secret
+`CLOUDFLARE_BOOTSTRAP_APPROVED_DATA`. It is not a new provider key. Never put a
+recovery private key in Actions, arguments, output, or the envelope.
+
+Verify the existing provider token's current write capability before selecting
+`mode=apply`, `confirmation=APPLY_STATE_BOOTSTRAP`, and the prior `custody_run`.
+The driver independently authenticates that successful check's native Actions
+run, same reviewed main revision, signed result commit, check-mode receipt and
+unchanged recovery files. A stale, failed, different-source or apply-mode run
+cannot satisfy this gate. A main revision change requires a new custody check.
+
+Apply decodes the approved bytes only into verified runner tmpfs, preserves the
+imported lineage, checks the pinned native saved-plan rendering and exact
+one-bucket/no-update/no-delete boundary, and freshly verifies bucket absence.
+It applies that saved binary once. It captures and encrypts the resulting state
+even after a partial apply or unsuccessful convergence, then verifies permanent
+Git publication. A failed apply, changed provider plan, unsigned/moved Git
+commit or incomplete readback is UNVERIFIED even if recovery bytes were retained.
+
+The fixed ciphertext-only artifact is a seven-day fallback if publication fails.
+Failed native capture also encrypts bounded local state/log diagnostics; it never
+publishes plaintext. Cancellation or missing capture is unverified: retain all
+evidence and reconcile the provider with the last authenticated lineage before
+retrying. Recover the tagged package into private custody and authenticate it
+with the independent identity before later migration steps. Keep the prior
+verified generation until this succeeds. Remove the one-use DATA secret only
+after the resulting recovery generation has been verified independently.
+
+The first apply proves only this selected bootstrap change and local-state
+provider convergence. It does not prove remote backend locking, independent
+clean-environment recovery, later imports or general automation readiness.
+
 ### Migration and recovery gates
 
 1. Inventory zones, records, buckets, lifecycle and lock settings, members, and

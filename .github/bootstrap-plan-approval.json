@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "kind": "cloudflare-state-bootstrap-plan",
+  "sourceCommit": "0925d157610d9e281e07557e689a321dadc791e9",
+  "sourceRun": 41368905763,
+  "capturedAt": "2026-11-02T00:46:14Z",
+  "stateManifestSha256": "35562aebf166e884af70d4df8b3b8b700fdfda92047f233a4919ec5ba810d170",
+  "binaryPlaintextSha256": "bb394f9350f1edfe8b1ea15628887c1310e02d60ab347380117737ac7ad5e080",
+  "binaryCiphertextSha256": "650c183c8cc28b85570e7b9634c53c4e9f2148ab948ffde5eb60d4467c8fcdef",
+  "jsonPlaintextSha256": "64003aa9ae7b476e24b6bf214ad9f651a5480c559ff94fe22d27a06bfec43b59",
+  "jsonCiphertextSha256": "24719c00394cbd331763aa3c14ba148db64493fe39b398407ec819102d1499aa",
+  "resourceCreates": 1,
+  "resourceUpdates": 0,
+  "resourceDeletes": 0
+}
