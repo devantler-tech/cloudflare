@@ -4,6 +4,7 @@ set -euo pipefail
 set +x
 umask 077
 unset CLOUDFLARE_API_TOKEN CLOUDFLARE_BOOTSTRAP_APPROVED_DATA GH_HOST GH_ENTERPRISE_HOST GH_ENTERPRISE_TOKEN GH_DEBUG GH_FORCE_TTY
+# Keep API response bodies and publication payloads out of the public receipt.
 fail() { printf 'CLOUDFLARE_STATE_PUBLICATION=UNVERIFIED stage=%s\n' "$1" >&2; exit 2; }
 [[ $# == 3 ]] || fail arguments
 root=$1 package=$2 phase=$3
@@ -21,11 +22,14 @@ export GH_CONFIG_DIR="$scratch/gh" GH_PROMPT_DISABLED=1 GH_NO_UPDATE_NOTIFIER=1 
 mkdir -m 700 "$GH_CONFIG_DIR"
 branch="recovery/cloudflare-state-$GITHUB_RUN_ID"
 tag="refs/tags/cloudflare-state-$GITHUB_RUN_ID"
+# Read a fixed recovery path at an immutable commit into the caller's private file.
+# Arguments are repository path, local destination and full commit identity.
 readback_file() {
   gh api --method GET "repos/devantler-tech/cloudflare/contents/$1" -f "ref=$3" > "$scratch/readback.json" 2> "$scratch/api.err" || fail readback
   jq -e '.encoding=="base64" and .type=="file" and (.size|type=="number" and .>=0 and .<=262144)' "$scratch/readback.json" >/dev/null 2>&1 || fail readback-format
   jq -r .content "$scratch/readback.json" | base64 --decode > "$2" 2>/dev/null || fail readback-encoding
 }
+# Require a verified GitHub signature and exactly the reviewed source as parent.
 verify_commit() {
   gh api "repos/devantler-tech/cloudflare/git/commits/$1" > "$scratch/commit.json" 2> "$scratch/api.err" || fail signature-read
   jq -e --arg commit "$1" --arg parent "$GITHUB_SHA" '.sha==$commit and .verification.verified==true and .verification.reason=="valid" and ([.parents[].sha]==[$parent])' "$scratch/commit.json" >/dev/null 2>&1 || fail signed-commit
@@ -47,6 +51,7 @@ if [[ $phase == verify ]]; then
   printf 'CLOUDFLARE_STATE_PUBLICATION=CUSTODY_VERIFIED source_run=%s\n' "$CUSTODY_RUN"
   exit 0
 fi
+# Reserve a new ref at the exact commit; never update or adopt an existing ref.
 create_ref() {
   jq -n --arg ref "$1" --arg sha "$2" '{ref:$ref,sha:$sha}' > "$scratch/ref-input.json"
   gh api --method POST repos/devantler-tech/cloudflare/git/refs --input "$scratch/ref-input.json" > "$scratch/ref-response.json" 2> "$scratch/api.err" || fail create-ref

@@ -6,6 +6,7 @@ set +x
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=scripts/state-recovery-common.sh
 source "$script_dir/state-recovery-common.sh"
+# Refuse with a fixed label; the owned-output trap removes partial decoded bytes.
 fail() { printf 'CLOUDFLARE_BOOTSTRAP_INPUT=UNVERIFIED stage=%s\n' "$1" >&2; exit 2; }
 [[ $# == 3 ]] || fail arguments
 root=$1 input=$2 destination=$3

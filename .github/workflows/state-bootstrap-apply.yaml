@@ -25,6 +25,7 @@ concurrency:
 
 jobs:
   bootstrap:
+    name: Bootstrap reviewed storage with independent recovery
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:

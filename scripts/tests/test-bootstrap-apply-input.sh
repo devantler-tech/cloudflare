@@ -12,9 +12,11 @@ printf '%s\n' '{"version":4,"terraform_version":"1.12.6","lineage":"aaaaaaaa-bbb
 printf '%s\n' 'PRIVATE_SYNTHETIC_BINARY_PLAN' > "$scratch/plan"
 printf '%s\n' 'PRIVATE_SYNTHETIC_PLAN_JSON' > "$scratch/plan.json"
 bash "$root/scripts/prepare-state-recovery-package.sh" "$scratch/repo" "$scratch/state.json" "$scratch/configuration.json" "$scratch/repo/recovery/state" 1111111111111111111111111111111111111111 123456789 2026-11-02T00:00:00Z >/dev/null
+# Bind fixture bytes to their approval without involving any provider.
 hash() { shasum -a 256 "$1" | awk '{print $1}'; }
 jq -n --arg manifest "$(hash "$scratch/repo/recovery/state/manifest.json")" --arg binary "$(hash "$scratch/plan")" --arg json "$(hash "$scratch/plan.json")" \
   '{schemaVersion:1,kind:"cloudflare-state-bootstrap-plan",sourceCommit:"1111111111111111111111111111111111111111",sourceRun:123456789,stateManifestSha256:$manifest,binaryPlaintextSha256:$binary,jsonPlaintextSha256:$json,resourceCreates:1,resourceUpdates:0,resourceDeletes:0}' > "$scratch/repo/.github/bootstrap-plan-approval.json"
+# Encode synthetic fixture data; no authentication credential is prepared here.
 encode() { base64 < "$1" | tr -d '\n'; }
 jq -n --arg state "$(encode "$scratch/state.json")" --arg configuration "$(encode "$scratch/configuration.json")" --arg plan "$(encode "$scratch/plan")" --arg planJson "$(encode "$scratch/plan.json")" \
   '{state:$state,configuration:$configuration,plan:$plan,planJson:$planJson}' > "$scratch/input.json"
@@ -22,6 +24,7 @@ bash "$root/scripts/decode-bootstrap-apply-input.sh" "$scratch/repo" "$scratch/i
 for file in state.json configuration.json plan plan.json; do cmp "$scratch/$file" "$scratch/accepted/$file"; done
 if grep -q PRIVATE_SYNTHETIC "$scratch/stdout" "$scratch/stderr"; then exit 1; fi
 
+# A rejected input must leave neither partial plaintext nor fixture data in logs.
 refuse() {
   rm -rf "$scratch/refused"
   if bash "$root/scripts/decode-bootstrap-apply-input.sh" "$scratch/repo" "$1" "$scratch/refused" > "$scratch/stdout" 2> "$scratch/stderr"; then

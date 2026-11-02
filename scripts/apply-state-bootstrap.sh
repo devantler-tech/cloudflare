@@ -4,6 +4,7 @@ set -euo pipefail
 set +x
 umask 077
 stage=dispatch
+# Report only the fixed failed stage; private provider output stays in scratch.
 stop() { printf 'CLOUDFLARE_BOOTSTRAP_APPLY=UNVERIFIED stage=%s\n' "$stage" >&2; exit 2; }
 [[ $# == 1 && -d $1 && ! -L $1 ]] || stop
 root=$1
@@ -41,6 +42,8 @@ stage=private-workspace
 [[ -n $provider_token && -n $approved_data && $(findmnt -n -o FSTYPE --target /dev/shm) == tmpfs ]] || stop
 scratch=$(mktemp -d /dev/shm/cloudflare-bootstrap-apply.XXXXXXXX) || stop
 recipient=$(state_recipient "$root")
+# Attempt bounded, source-bound encrypted diagnostics before removing owned RAM.
+# This trap never turns failed capture or publication into a successful receipt.
 cleanup() {
   local result=$? file
   if [[ $result != 0 ]]; then
@@ -71,6 +74,7 @@ printf 'terraform {\n  backend "local" {}\n}\n' > "$scratch/work/backend_overrid
 cp "$scratch/accepted/state.json" "$scratch/work/terraform.tfstate"
 cp "$scratch/accepted/configuration.json" "$scratch/work/production.auto.tfvars.json"
 cp "$scratch/accepted/plan" "$scratch/work/migration.tfplan"
+# Isolate native CLI configuration and expose the token only in provider mode.
 run_tofu() (
   mode=$1; shift
   # Neither workflow credentials nor ambient CLI arguments enter the provider.

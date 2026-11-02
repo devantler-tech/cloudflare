@@ -52,6 +52,7 @@ export GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/main GITHUB_REP
 export GITHUB_WORKFLOW_REF=devantler-tech/cloudflare/.github/workflows/state-bootstrap-apply.yaml@refs/heads/main
 export GITHUB_RUN_ID=123456789 GITHUB_SHA=1111111111111111111111111111111111111111 GH_TOKEN=SYNTHETIC_TOKEN CLOUDFLARE_API_TOKEN=SYNTHETIC_PROVIDER_TOKEN
 export BOOTSTRAP_MODE=check BOOTSTRAP_APPLY_EXIT=0 BOOTSTRAP_PLAN_EXIT=0
+# Exercise the real publisher with every network call replaced by the local gh double.
 publish() { bash "$root/scripts/publish-bootstrap-state.sh" "$root" "$root/recovery/state" "$1"; }
 publish checkpoint > "$scratch/stdout" 2> "$scratch/stderr"
 printf '%s\n' "$GITHUB_SHA" > "$scratch/head"
