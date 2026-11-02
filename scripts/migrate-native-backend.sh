@@ -4,7 +4,7 @@
 set +x
 set -euo pipefail
 umask 077
-stage=arguments writer='' reader='' child='' log=''
+stage=arguments writer='' reader='' child='' log='' workspace_probe=''
 fail() { printf 'NATIVE_STATE_MIGRATION=UNVERIFIED stage=%s\n' "$stage" >&2; exit 2; }
 # EOF aborts an unanswered native prompt. Drain output so its normal error path
 # can release locks before waiting; an unresponsive child has its own deadline.
@@ -16,6 +16,7 @@ finish() {
     exec {reader}<&-
   fi
   [[ -z "$child" ]] || wait "$child" 2>/dev/null || true
+  [[ -z "$workspace_probe" ]] || rm -rf "$workspace_probe"
   return "$rc"
 }
 trap finish EXIT
@@ -34,6 +35,37 @@ command -v timeout >/dev/null 2>&1 || fail
 stage=version
 version=$(tofu version -json 2>/dev/null) || fail
 printf '%s' "$version" | jq -e '.terraform_version=="1.12.6"' >/dev/null 2>&1 || fail
+stage=destination-workspaces
+# Inspect a separate, state-free copy of the destination declaration. Running
+# init beside the local source file can itself propose migration, even with
+# reconfigure. Only absolute local fixture paths or the fixed S3 profile qualify.
+workspace_probe=$(mktemp -d "$3/workspace-probe.XXXXXXXX")
+shopt -s nullglob
+declarations=("$module/"*.tf "$module/"*.tf.json)
+[[ ${#declarations[@]} -gt 0 && ${#declarations[@]} -le 32 ]] || fail
+for file in "${declarations[@]}"; do
+  [[ -f "$file" && ! -L "$file" ]] || fail
+  cp "$file" "$workspace_probe/${file##*/}"
+done
+if [[ -e "$module/.terraform.lock.hcl" || -L "$module/.terraform.lock.hcl" ]]; then
+  [[ -f "$module/.terraform.lock.hcl" && ! -L "$module/.terraform.lock.hcl" ]] || fail
+  cp "$module/.terraform.lock.hcl" "$workspace_probe/.terraform.lock.hcl"
+fi
+cp "$configuration" "$workspace_probe/backend.hcl"
+configuration="$workspace_probe/backend.hcl"
+timeout --kill-after=10s 90 tofu -chdir="$workspace_probe" init -input=false -no-color -backend-config="$configuration" > "$3/destination-init.log" 2>&1 || fail
+jq -e '.backend.type=="s3" or (.backend.type=="local" and
+  (.backend.config.path|type=="string" and startswith("/")) and
+  (.backend.config.workspace_dir|type=="string" and startswith("/")))' "$workspace_probe/.terraform/terraform.tfstate" >/dev/null 2>&1 || fail
+# Native structured output binds the selected destination to default only.
+# Re-read immediately before confirmation while the migration lock is held.
+logs=$3
+destination_workspaces() {
+  timeout --kill-after=10s 30 tofu -chdir="$workspace_probe" workspace list -json > "$logs/destination-workspaces.json" 2> "$logs/destination-workspaces-error.log" || return 1
+  jq -se 'length==2 and .[0].type=="version" and .[1].type=="workspace_list" and
+    .[1].current_workspace=="default" and .[1].workspaces==["default"]' "$logs/destination-workspaces.json" >/dev/null 2>&1
+}
+destination_workspaces || fail
 stage=copy
 coproc MIGRATION { timeout --kill-after=10s 180 tofu -chdir="$module" init -migrate-state -no-color -backend-config="$configuration" 2>&1; }
 # shellcheck disable=SC2153 # Bash creates this for the named coprocess above.
@@ -61,6 +93,14 @@ while true; do
     if [[ $answers == 0 && "$buffer" == *'Do you want to copy existing state to the new backend?'* &&
       "$buffer" == *'No existing state was found'* && "${buffer,,}" != *'overwrite'* &&
       "${buffer,,}" != *'non-empty'* && "${buffer,,}" != *'all workspaces'* ]]; then
+      stage=destination-workspaces
+      if ! destination_workspaces; then
+        refused=true
+        [[ -z "$writer" ]] || exec {writer}>&-
+        writer=''
+        continue
+      fi
+      stage=copy
       printf 'yes\n' >&"$writer" || fail
       answers=1
       buffer=''

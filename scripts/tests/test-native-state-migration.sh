@@ -9,7 +9,7 @@ scratch=$(mktemp -d)
 finish() {
   local rc=$?
   if [[ $rc != 0 ]]; then
-    for log in source/init.log source/apply.log positive-result positive-logs/migration.log refused-result refused-logs/migration.log; do
+    for log in source/init.log source/apply.log positive-result positive-logs/destination-init.log positive-logs/destination-workspaces.json positive-logs/destination-workspaces-error.log positive-logs/migration.log refused-result refused-logs/migration.log named-result named-logs/destination-workspaces.json named-logs/migration.log; do
       [[ ! -f "$scratch/$log" ]] || cat "$scratch/$log" >&2
     done
     for state in expected-source.json actual.json; do
@@ -34,7 +34,7 @@ HCL
 }
 seed "$scratch/source" synthetic-source
 cp "$scratch/source/terraform.tfstate" "$scratch/expected-source.json"
-printf 'path = "%s/destination.tfstate"\n' "$scratch" > "$scratch/destination.hcl"
+printf 'path = "%s/destination.tfstate"\nworkspace_dir = "%s/positive-workspaces"\n' "$scratch" "$scratch" > "$scratch/destination.hcl"
 mkdir "$scratch/positive-logs"
 TF_IN_AUTOMATION=1 bash "$root/scripts/migrate-native-backend.sh" "$scratch/source" "$scratch/destination.hcl" "$scratch/positive-logs" > "$scratch/positive-result" 2>&1
 grep -qx 'NATIVE_STATE_MIGRATION=VERIFIED confirmation=empty-destination' "$scratch/positive-result"
@@ -46,7 +46,7 @@ jq -e --slurpfile expected "$scratch/expected-source.json" '.serial>=$expected[0
 seed "$scratch/refused-source" synthetic-other-source
 seed "$scratch/occupied" keep-destination
 cp "$scratch/occupied/terraform.tfstate" "$scratch/expected-destination.json"
-printf 'path = "%s/occupied/terraform.tfstate"\n' "$scratch" > "$scratch/occupied.hcl"
+printf 'path = "%s/occupied/terraform.tfstate"\nworkspace_dir = "%s/occupied/terraform.tfstate.d"\n' "$scratch" "$scratch" > "$scratch/occupied.hcl"
 mkdir "$scratch/refused-logs"
 rc=0
 bash "$root/scripts/migrate-native-backend.sh" "$scratch/refused-source" "$scratch/occupied.hcl" "$scratch/refused-logs" > "$scratch/refused-result" 2>&1 || rc=$?
@@ -75,5 +75,35 @@ bash "$root/scripts/migrate-native-backend.sh" "$scratch/multi-source" "$scratch
 [[ $rc == 2 ]]
 grep -qx 'NATIVE_STATE_MIGRATION=UNVERIFIED stage=destination' "$scratch/multi-result"
 [[ ! -e "$scratch/multi-destination.tfstate" ]]
+
+# The source has only default, but destination has a populated named workspace
+# and an empty default. The default prompt alone cannot establish this census.
+seed "$scratch/named-source" synthetic-named-source
+mkdir "$scratch/named-destination"
+cp "$scratch/named-source/main.tf" "$scratch/named-destination/main.tf"
+tofu -chdir="$scratch/named-destination" init -input=false -no-color > "$scratch/named-destination/init.log" 2>&1
+tofu -chdir="$scratch/named-destination" workspace new retained > "$scratch/named-destination/new.log" 2>&1
+tofu -chdir="$scratch/named-destination" apply -auto-approve -input=false -no-color > "$scratch/named-destination/apply.log" 2>&1
+tofu -chdir="$scratch/named-destination" workspace select default > "$scratch/named-destination/select.log" 2>&1
+cp "$scratch/named-destination/terraform.tfstate.d/retained/terraform.tfstate" "$scratch/expected-named.json"
+cp "$scratch/named-source/terraform.tfstate" "$scratch/expected-named-source.json"
+printf 'path = "%s/named-destination/terraform.tfstate"\nworkspace_dir = "%s/named-destination/terraform.tfstate.d"\n' "$scratch" "$scratch" > "$scratch/named.hcl"
+mkdir "$scratch/named-logs"
+rc=0
+bash "$root/scripts/migrate-native-backend.sh" "$scratch/named-source" "$scratch/named.hcl" "$scratch/named-logs" > "$scratch/named-result" 2>&1 || rc=$?
+[[ $rc == 2 ]]
+grep -qx 'NATIVE_STATE_MIGRATION=UNVERIFIED stage=destination-workspaces' "$scratch/named-result"
+cmp "$scratch/named-destination/terraform.tfstate.d/retained/terraform.tfstate" "$scratch/expected-named.json"
+cmp "$scratch/named-source/terraform.tfstate" "$scratch/expected-named-source.json"
+[[ ! -e "$scratch/named-destination/terraform.tfstate" ]]
+
+mkdir "$scratch/relative-logs"
+printf 'path = "relative.tfstate"\nworkspace_dir = "relative-workspaces"\n' > "$scratch/relative.hcl"
+rc=0
+bash "$root/scripts/migrate-native-backend.sh" "$scratch/named-source" "$scratch/relative.hcl" "$scratch/relative-logs" > "$scratch/relative-result" 2>&1 || rc=$?
+[[ $rc == 2 ]]
+grep -qx 'NATIVE_STATE_MIGRATION=UNVERIFIED stage=destination-workspaces' "$scratch/relative-result"
+cmp "$scratch/named-source/terraform.tfstate" "$scratch/expected-named-source.json"
+[[ ! -e "$scratch/named-source/relative.tfstate" ]]
 
 printf '%s\n' 'PASS: native empty-destination migration preserves state and occupied destination refuses without overwrite'

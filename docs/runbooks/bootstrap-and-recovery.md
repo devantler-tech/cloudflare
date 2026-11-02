@@ -470,7 +470,12 @@ The pinned native OpenTofu CLI initializes a local synthetic module without
 provider resources and writes its state. It then migrates that state to its
 isolated R2 prefix using `init -migrate-state`. The confirmation helper accepts
 only the pinned native empty-destination prompt, while OpenTofu holds both locks
-and refreshes both states. Non-empty state, additional workspaces, unexpected
+and refreshes both states. A separate state-free declaration first enumerates
+the destination with the native structured workspace API, then rechecks it while
+the migration lock is held before confirmation. Only default is admitted; the
+source's own saved backend and data are not used for this census. Local fixtures
+require absolute state and workspace paths, so probing cannot silently inspect
+a different relative location. Non-empty state, additional workspaces, unexpected
 prompts and inherited command overrides refuse; no force-copy or overwrite is
 accepted. The imported lineage and contents must match, and the native serial
 may advance but never decrease. The workflow then holds the real backend lock through its
