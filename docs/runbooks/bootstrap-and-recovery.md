@@ -2,7 +2,8 @@
 
 This procedure keeps Cloudflare recovery independent of the Kubernetes
 platform. It never reads credentials from a cluster-hosted secret and never
-writes credentials or state into this repository.
+writes plaintext credentials or state into this repository. Essential encrypted
+state and configuration recovery packages use the custody procedure below.
 
 ## Prerequisites
 
@@ -311,8 +312,10 @@ Active state still belongs in the independently accessible locked R2 backend.
 Its minimum authenticated encrypted recovery copy belongs with this owner,
 including source revision, lineage and serial bindings. That state format,
 publication path, actual lock-contention test and clean-environment recovery
-remain part of the first migration. No real state recovery package is currently
-retained, and no apply automation is enabled by the packaging helpers.
+remain part of the first migration. The retained initial generation contains the
+runner-local zone import and matching desired configuration from the confirmed
+bootstrap plan; it does not establish provider convergence or remote locking.
+No apply automation is enabled by the packaging helpers.
 
 ### State recovery format
 

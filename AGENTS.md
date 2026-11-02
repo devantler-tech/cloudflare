@@ -30,8 +30,9 @@ the clean and disposable failure fixtures locally.
   plans. The maintainer-approved exception is authenticated ciphertext for
   essential bootstrap recovery in `recovery/`, bound by its registered package
   validator and an independently recoverable key. Ordinary service credentials
-  stay in OpenBao. The current package covers a historical DNS snapshot only;
-  adding state recovery requires its own reviewed format and recovery proof.
+  stay in OpenBao. Paired state packages bind encrypted state and desired
+  configuration to their reviewed source and run; authenticate recovery with
+  the independently held identity before using either file.
 - Import every existing resource before any apply. During migration, convert
   the plan to JSON and run `scripts/assert-no-destructive-plan.sh`; any delete
   or replacement is a hard stop.

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "kind": "cloudflare-state-recovery",
+  "capturedAt": "2026-11-02T00:46:14Z",
+  "sourceCommit": "0925d157610d9e281e07557e689a321dadc791e9",
+  "sourceRun": 41368905763,
+  "recipient": "age1rk6fs67kly3h4zux5za429z3grjtvs8vcunav4sa28pxk738najsk8wgs6",
+  "lineage": "d981e029-9986-63a7-2f54-379ce10ee6a4",
+  "serial": 1,
+  "accountIdSha256": "3080d90d2ff8a5d38ec8c5dae7b9207b928b353c68f4dd81e0a378cf932a5f95",
+  "zoneNameSha256": "1fc6c364e0d592421f88ba2d2cf6cf15691bbc711113d7907c159a638f35aeb0",
+  "stateCiphertextSha256": "4dd0e162814c478c0d675e034eec887de40a382a96f9bb251afb841fabe2709f",
+  "configurationCiphertextSha256": "5c9527c73d0bfacf126939b555a609c6895ca98cbeb044d7793a33ee65460030",
+  "statePlaintextSha256": "bf7b431748872f53861aa655cb40c0f2734410f03514e97de5f30ea0aaf69442",
+  "configurationPlaintextSha256": "84c9b6ea504f82a9fd694e701287e30d54fe9b42ecf81dfccfbf2cba9873239a"
+}

@@ -94,6 +94,12 @@ The retained pre-migration DNS snapshot lives as authenticated ciphertext in
 Keychain. This historical snapshot is neither current desired configuration nor
 OpenTofu state; the runbook describes its limits and recovery checks.
 
+The paired package in [`recovery/state/`](recovery/state/) retains captured
+OpenTofu state and its complete desired configuration. Its manifest binds both
+encrypted files to their source and run. Verify authenticated recovery before
+using a generation, and refresh it after each reviewed apply. Provider convergence
+and remote backend locking have separate acceptance checks in the runbook.
+
 In those procedures the provider reads `CLOUDFLARE_API_TOKEN`, and the state
 backend reads the standard `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
 variables. Keep all three out of shell history and plaintext repository files.
