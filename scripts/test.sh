@@ -19,7 +19,10 @@ bash scripts/tests/test-bootstrap-apply-lifecycle.sh
 bash scripts/tests/test-r2-backend-input.sh
 bash scripts/tests/test-native-state-lock.sh
 bash scripts/tests/test-native-state-migration.sh
+GOWORK=off GOFLAGS='' GOTOOLCHAIN=local go test -count=1 scripts/check-native-workspace-list.go scripts/check-native-workspace-list_test.go
+GOWORK=off GOFLAGS='' GOTOOLCHAIN=local go test -count=1 -race -timeout=3m scripts/tests/native-s3-migration_test.go
 bash scripts/tests/test-state-backend-workflow.sh
+bash scripts/tests/test-state-migration-workflow.sh
 bash scripts/check-recovery-package.sh "$repo_root"
 tofu fmt -check -recursive
 tofu init -backend=false -input=false

@@ -494,3 +494,71 @@ An early dispatch or configuration refusal may produce no archive. A failed
 run is not rerun: diagnose its recorded stage and native evidence before a new
 confirmed first attempt. This prerequisite alone neither migrates real state
 nor accepts production recovery or general provider applies.
+
+The pinned remote state manager resets imported metadata when its first
+persistence refreshes an absent destination. The migration helper therefore
+initializes only a verified empty S3 destination using a separate module with
+no providers, resources or outputs. Its saved native plan must report zero
+changes and empty prior/planned values before it can be applied. The native
+saved-plan identity and locking refuse a competing state written between plan
+and apply. No state metadata is hand-edited, and the original lineage and
+nondecreasing serial remain mandatory after migration.
+
+Before each native workspace census, curl's native AWS V4 signer requires a
+successful listing of the exact workspace prefix. A bounded standard-library
+XML validator requires the matching bucket and prefix, one explicit untruncated
+result, no continuation and no objects. This compensates for the native
+backend's compatibility behavior that hides denied workspace listings.
+Credentials reach the signer only through an inherited input pipe, and the
+numeric status remains in encrypted evidence. Raw responses stay outside that
+evidence until success, complete validation and a credential-echo check pass.
+Go and curl with
+AWS V4 signing are required on the runner. The local S3 protocol fixture tests
+the actual CLI's state behavior; only the independent real R2 trial accepts
+provider behavior and credential scoping.
+
+## Guarded production-state migration
+
+The separately reviewed `state-backend-migrate.yaml` workflow performs only the
+native backend initialization/copy and read-only provider checks. It never imports resources,
+applies a provider-resource change, forces a copy, overwrites occupied state, or enables general
+applies. Keep the original authenticated recovery generation throughout.
+
+1. At the exact reviewed `main` revision, complete a first-attempt synthetic
+   backend proof and independently authenticate its native evidence. The real
+   migration checks that run's repository, workflow, operator, revision, first
+   attempt and successful conclusion through the Actions API.
+2. Through the approved private handoff, save the original authenticated state
+   as canonical base64 in the one-use Actions secret
+   `CLOUDFLARE_BOOTSTRAP_MIGRATION_STATE`. This is captured infrastructure data,
+   not an additional provider credential. The input must match the complete
+   registered state digest; the existing configuration input must match its
+   paired digest. No private recovery key enters CI.
+3. Dispatch once from `main` with `MIGRATE_STATE_BACKEND` and that `proof_run`.
+   The first job initializes the captured local state and requires a zero-change
+   provider plan before copying it into the empty production S3 backend. The
+   original lineage and logical contents must survive; native serial advances
+   are admitted only when they do not change those contents.
+4. A separate hosted runner initializes from repository configuration and a new
+   15-minute storage session. It receives no first-job artifact, local state,
+   backend cache or plan. The frozen input is only an authenticated comparison
+   reference. Both jobs prove native lock contention and normal release, capture
+   paired encrypted recovery, and require a zero-change provider plan. The
+   recovery job also runs after a first-job failure so a completed copy can be
+   inspected without repeating or forcing it.
+5. Download and authenticate both encrypted captures with the independent
+   infrastructure identity. Check the recovered lineage, logical contents and
+   serial, native migration log, actual lock refusal and provider plans. Retain
+   the authenticated post-migration generation in `recovery/backend-source/`
+   through a signed, reviewed data-only PR, preserving the earlier generation in
+   history. Read it back and authenticate it again. Expiring artifacts alone do
+   not accept custody. Remove the one-use Actions state setting after capture
+   and independent verification. General applies remain disabled pending their
+   own guarded execution and permanent after-apply recovery publication.
+
+The backend key and workspace prefix are fixed in reviewed code, and the storage
+session is restricted to that prefix. Each stage uses private RAM-backed scratch;
+only selected encrypted evidence and the paired ciphertext package leave it.
+Credential responses and headers are never archived. On any failure, inspect
+the recorded stage and authenticated native evidence before a new confirmed
+attempt; never rerun the migration or force-unlock to make the gate green.

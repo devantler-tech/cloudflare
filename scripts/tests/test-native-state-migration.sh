@@ -102,7 +102,7 @@ printf 'path = "relative.tfstate"\nworkspace_dir = "relative-workspaces"\n' > "$
 rc=0
 bash "$root/scripts/migrate-native-backend.sh" "$scratch/named-source" "$scratch/relative.hcl" "$scratch/relative-logs" > "$scratch/relative-result" 2>&1 || rc=$?
 [[ $rc == 2 ]]
-grep -qx 'NATIVE_STATE_MIGRATION=UNVERIFIED stage=destination-workspaces' "$scratch/relative-result"
+grep -qx 'NATIVE_STATE_MIGRATION=UNVERIFIED stage=destination-profile' "$scratch/relative-result"
 cmp "$scratch/named-source/terraform.tfstate" "$scratch/expected-named-source.json"
 [[ ! -e "$scratch/named-source/relative.tfstate" ]]
 
