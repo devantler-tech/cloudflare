@@ -33,7 +33,9 @@ IFS= read -r -t 25 -u "$reader" observed || fail
 stage=contention
 rc=0
 timeout 30 tofu -chdir="$module" plan -lock-timeout=0s -input=false -no-color > "$logs/contender.log" 2>&1 || rc=$?
-if [[ $rc != 1 ]] || ! grep -Fq 'Error acquiring the state lock' "$logs/contender.log"; then fail; fi
+if [[ $rc != 1 ]] || ! grep -Fq 'Error acquiring the state lock' "$logs/contender.log" ||
+  ! grep -Fxq 'Lock Info:' "$logs/contender.log" ||
+  [[ $(grep -Ec '^  ID: +[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$' "$logs/contender.log") != 1 ]]; then fail; fi
 stage=release
 printf 'exit\n' >&"$writer" || fail
 exec {writer}>&-
