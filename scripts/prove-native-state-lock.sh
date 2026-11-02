@@ -6,6 +6,8 @@ set -euo pipefail
 umask 077
 stage=arguments writer='' reader='' locker_pid=''
 fail() { printf 'NATIVE_STATE_LOCK=UNVERIFIED stage=%s\n' "$stage" >&2; exit 2; }
+# Close the console normally even on a refused contender, preserving the
+# original result. Its finite native timeout bounds an unresponsive child.
 finish() {
   local rc=$?
   if [[ -n "$writer" ]]; then

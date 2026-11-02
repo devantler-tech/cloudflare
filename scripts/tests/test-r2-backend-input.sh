@@ -22,7 +22,13 @@ backend_session "$scratch/session.json"
 for scenario in missing-token duplicate-token null-token header-injection extra-result too-large; do
   case "$scenario" in
     missing-token) jq 'del(.result.sessionToken)' "$scratch/session.json" > "$scratch/bad.json" ;;
-    duplicate-token) printf '{"success":true,"result":{"sessionToken":"first","sessionToken":"second"}}' > "$scratch/bad.json" ;;
+    duplicate-token)
+      jq -c . "$scratch/session.json" | sed 's/"sessionToken":"SYNTHETIC_SESSION_TOKEN"/&,"sessionToken":"SYNTHETIC_SESSION_TOKEN_2"/' > "$scratch/bad.json"
+      # Ordinary decoding erases the duplicate. Its result must still pass all
+      # other checks, so this case tests duplicate rejection specifically.
+      jq -c . "$scratch/bad.json" > "$scratch/normalized-session.json"
+      backend_session "$scratch/normalized-session.json"
+      ;;
     null-token) jq '.result.sessionToken=null' "$scratch/session.json" > "$scratch/bad.json" ;;
     header-injection) jq '.result.sessionToken="synthetic\r\nAuthorization: injected"' "$scratch/session.json" > "$scratch/bad.json" ;;
     extra-result) jq '.result.unreviewed="extra"' "$scratch/session.json" > "$scratch/bad.json" ;;

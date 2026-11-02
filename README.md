@@ -35,9 +35,17 @@ You need:
 - [ShellCheck](https://github.com/koalaman/shellcheck#installing), `jq`, and
   [age](https://github.com/FiloSottile/age) (`age` and `age-keygen` on `PATH`;
   CI verifies the pinned 1.3.2 release archive before using it);
-- a POSIX shell; and
+- Bash 5 or newer as `bash` on `PATH`, and GNU coreutils `timeout`; and
 - network access to `registry.opentofu.org` and to GitHub's release downloads,
   where OpenTofu fetches the pinned Cloudflare provider on the first run.
+
+On macOS, the system Bash 3.2 is insufficient for the native locking test.
+Install the additional tools with Homebrew and select them for these checks:
+
+```sh
+brew install bash coreutils
+export PATH="$(brew --prefix)/bin:$(brew --prefix coreutils)/libexec/gnubin:$PATH"
+```
 
 From the repository root:
 

@@ -5,6 +5,8 @@ set +x
 set -euo pipefail
 umask 077
 stage=dispatch scratch='' output_created=false
+# Export only selected encrypted native evidence, erase caller-owned scratch,
+# and emit acceptance only after encryption succeeds. Never archive credentials.
 finish() {
   local rc=$?
   if [[ -n "$scratch" ]]; then

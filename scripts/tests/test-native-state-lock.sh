@@ -4,6 +4,8 @@
 set -euo pipefail
 root=$(CDPATH='' cd -- "$(dirname -- "$0")/../.." && pwd)
 scratch=$(mktemp -d)
+# Preserve useful synthetic native logs on failure, then remove this test's
+# temporary state and files. This fixture contains no production credentials.
 finish() {
   local rc=$?
   if [[ $rc != 0 ]]; then

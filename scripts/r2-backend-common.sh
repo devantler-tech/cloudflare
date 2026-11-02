@@ -2,6 +2,8 @@
 # Pure validation shared by the confirmed backend proof and its negative tests.
 # shellcheck source=scripts/state-recovery-common.sh
 source "$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/state-recovery-common.sh"
+# Bind private configuration bytes to the reviewed encrypted capture before
+# deriving any provider account or backend destination from those values.
 backend_configuration() {
   local root=$1 file=$2 package="$1/recovery/backend-source"
   [[ -f "$file" && ! -L "$file" && $(wc -c < "$file") -le 8388608 ]] || return 1
@@ -14,6 +16,8 @@ backend_configuration() {
     (.r2_buckets|keys)==["cloudflare-bootstrap-state"]
   ' "$file" >/dev/null 2>&1
 }
+# Admit only one unambiguous, bounded native temporary-credential response.
+# Reject missing/extra fields and unsafe header characters without printing it.
 backend_session() {
   local file=$1
   [[ -f "$file" && ! -L "$file" && $(wc -c < "$file") -le 32768 ]] || return 1
