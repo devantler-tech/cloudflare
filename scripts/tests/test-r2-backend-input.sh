@@ -38,7 +38,7 @@ done
 # A green run from another source, workflow or attempt cannot authorize writes.
 jq -n '{id:123456789,head_sha:("a"*40),head_branch:"main",event:"workflow_dispatch",path:".github/workflows/state-backend-proof.yaml",actor:{login:"devantler"},run_attempt:1,status:"completed",conclusion:"success"}' > "$scratch/proof-run.json"
 backend_proof_run "$scratch/proof-run.json" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 123456789 987654321
-for mutation in '.head_sha=("b"*40)' '.path=".github/workflows/other.yaml"' '.conclusion="failure"' '.run_attempt=2' '.actor.login="other"' '.id=111111111'; do
+for mutation in '.head_sha=("b"*40)' '.head_branch="other"' '.event="push"' '.path=".github/workflows/other.yaml"' '.status="in_progress"' '.conclusion="failure"' '.run_attempt=2' '.actor.login="other"' '.id=111111111'; do
   jq "$mutation" "$scratch/proof-run.json" > "$scratch/wrong-proof.json"
   if backend_proof_run "$scratch/wrong-proof.json" aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 123456789 987654321; then
     printf '%s\n' 'FAIL: unrelated proof authorized migration' >&2; exit 1
