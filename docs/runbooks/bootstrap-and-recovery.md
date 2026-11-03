@@ -307,9 +307,7 @@ clean-environment recovery, later imports or general automation readiness.
     the state lock, confirm a second `tofu plan -lock-timeout=0s` fails to
     acquire it; a second plan that proceeds means locking is not in effect.
 
-## Recovery
-
-### Isolated native alert-journal proof
+## Isolated native alert-journal proof
 
 The opt-in **Alert journal native R2 proof** workflow validates the existing
 [journal implementation](https://github.com/devantler-tech/platform/pull/5329)
@@ -337,6 +335,8 @@ This tests the storage protocol, not production journal custody, rotation,
 retention, route cutovers or user notification delivery. Those remain under
 [the alerting migration](https://github.com/devantler-tech/platform/issues/4683).
 Do not configure the infrastructure-state bucket as the production journal.
+
+## Recovery
 
 Retrieve short-lived Cloudflare and R2 state credentials from the independent
 custody path, clone this repository on a clean machine, recreate `backend.hcl`,
