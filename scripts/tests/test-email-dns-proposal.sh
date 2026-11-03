@@ -51,6 +51,8 @@ for mutation in \
  '.records[4].settings.unsupported=true' \
  '.records[4].meta={managed_by_apps:true}' \
  '.records[4].tags=["owner:external-dns"]' \
+ '.records[4].tags=["owner:other-controller"]' \
+ '.records[4].meta={managed_by_future_controller:true}' \
  '.records[8].name="_externaldns.cname-sig1._domainkey.example.test"' \
  '.records[8].name="_externaldns.sig1._domainkey.example.test"' \
  '.records[2].content="unrecognized"' \
@@ -65,6 +67,9 @@ for mutation in \
  fi
 done
 printf '%s\n' 'PASS: only existing unambiguous static Email DNS is proposed'
+jq '.records[4].tags=["owner:cloudflare-repo","env:production"]|.records[4].comment="Preserve this human note"' "$scratch/snapshot.json" > "$scratch/known-owner.json"
+build "$scratch/known-owner.json" > "$scratch/known-owner-proposal.json"
+jq -e '.dns_records.email_00000000000000000000000000000005.tags==["owner:cloudflare-repo","env:production"] and .dns_records.email_00000000000000000000000000000005.comment=="Preserve this human note"' "$scratch/known-owner-proposal.json" >/dev/null
 
 jq --slurpfile proposal "$scratch/proposal.json" '.dns_records=$proposal[0].dns_records' "$scratch/fixture.tfvars.json" > "$scratch/proposal.tfvars.json"
 printf '%s\n' 'jsonencode(var.dns_records)' | tofu -chdir="$scratch" console -no-color -var-file=proposal.tfvars.json > "$scratch/roundtrip.string.json"

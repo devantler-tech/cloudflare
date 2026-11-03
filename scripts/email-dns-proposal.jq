@@ -27,9 +27,14 @@ def record_shape:
    all(.[];type=="boolean")) and
  (.private_routing==null or (.private_routing|type=="boolean")) and
  (.data==null or .data=={}) and
- ((.meta // {})|type=="object");
+ ((.meta // {})|type=="object" and
+   ((keys-["auto_added","managed_by_apps","managed_by_argo_tunnel"])|length)==0);
 def free_of_controller:
- ((.tags // [])|all(.[];(test("external-dns";"i")|not))) and
+ ((.tags // [])|all(.[];
+   (test("external-dns";"i")|not) and
+   (if test("^(owner|managed-by|controller):";"i") then
+      .=="owner:cloudflare-repo" or .=="managed-by:cloudflare-repo" or .=="controller:cloudflare-repo"
+    else true end))) and
  ((.comment // "")|test("external-dns";"i")|not) and
  ((.meta // {}) as $meta |
    all(["auto_added","managed_by_apps","managed_by_argo_tunnel"][];
