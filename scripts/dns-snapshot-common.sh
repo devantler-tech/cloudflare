@@ -2,9 +2,11 @@
 # Shared private DNS collector. Source only after dispatch and credential guards.
 [[ ${BASH_SOURCE[0]} != "$0" ]] || exit 2
 
+# Keep the complete, bounded same-zone inventory in caller-owned private scratch.
 collect_dns_snapshot() {
   local scratch=$1 zone_id page pages total
   : "${provider_token:?}"
+  # Send authorization on stdin for the caller's fixed HTTPS GET, never in argv.
   read_cloudflare() {
     printf 'header = "Authorization: Bearer %s"\n' "$provider_token" |
       curl --disable --config - --request GET --proto '=https' --noproxy '*' \

@@ -3,6 +3,7 @@
 set +x
 set -euo pipefail
 umask 077
+# Emit only the caller's closed failure stage, never a provider response.
 stop() { failure_stage=$1; printf 'EMAIL_DNS_PROPOSAL=UNVERIFIED stage=%s\n' "$1" >&2; exit 2; }
 [[ ${GITHUB_EVENT_NAME:-} == workflow_dispatch && ${GITHUB_REF:-} == refs/heads/main &&
    ${GITHUB_REPOSITORY:-} == devantler-tech/cloudflare && ${GITHUB_ACTOR:-} == devantler &&
@@ -51,6 +52,8 @@ pack_private() {
  [[ $(wc -c < "$scratch/bundle.tar.gz") -le 33554432 ]] || return 1
  age -r "$recipient" -o "$scratch/bundle.tar.gz.age" "$scratch/bundle.tar.gz" 2>/dev/null
 }
+# Encrypt bounded adverse evidence and remove only this invocation's scratch
+# and any incomplete output directory it created.
 cleanup() {
  local rc=$?
  if [[ $rc != 0 ]];then
@@ -87,6 +90,7 @@ jq -n --arg account "$account_id" --slurpfile dns "$scratch/proposal.json" --slu
  '{account_id:$account,zone_name:"devantler.tech",dns_records:$dns[0].dns_records,r2_buckets:{"cloudflare-bootstrap-state":{jurisdiction:"default",storage_class:$bucket[0].result.storage_class}},r2_lifecycle_rules:{},account_tokens:{}}' > "$scratch/work/production.auto.tfvars.json"
 jq --arg zone "$zone_id" --arg account "$account_id" \
  '.imports + [{address:"cloudflare_zone.primary",id:$zone},{address:"cloudflare_r2_bucket.buckets[\"cloudflare-bootstrap-state\"]",id:($account+"/cloudflare-bootstrap-state/default")}]|sort_by(.address)' "$scratch/proposal.json" > "$scratch/imports.json"
+# Expose the provider credential only to the isolated OpenTofu process.
 provider_tofu() (
  export CLOUDFLARE_API_TOKEN="$provider_token" TF_IN_AUTOMATION=true CHECKPOINT_DISABLE=1 TF_CLI_CONFIG_FILE="$scratch/provider.rc"
  tofu -chdir="$scratch/work" "$@"

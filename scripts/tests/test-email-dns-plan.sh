@@ -76,6 +76,7 @@ case $1 in
 esac
 TOFU
 chmod +x "$scratch/bin/curl" "$scratch/bin/tofu"
+# Exercise real encryption transport around controlled provider and CLI boundaries.
 run_case(){
  local name=$1 expected=$2 ref=refs/heads/main confirmation=PLAN_EMAIL_DNS token=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA rc=0
  local dir="$scratch/$name"
@@ -121,6 +122,7 @@ workflow="$root/.github/workflows/email-dns-proposal.yaml"
 expression=$(jq -nr --arg path "$workflow" '"jsonencode(yamldecode(file(" + ($path|tojson) + ")))"')
 printf '%s\n' "$expression" | tofu -chdir="$scratch/parse" console -no-color > "$scratch/workflow.string.json"
 jq -r . "$scratch/workflow.string.json" > "$scratch/workflow.json"
+# Check declared workflow custody and reject privilege, trigger and export changes.
 check_workflow(){
  jq -e '
   .permissions=={contents:"read"} and (.on|keys)==["workflow_dispatch"] and

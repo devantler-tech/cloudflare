@@ -30,6 +30,7 @@ jq -n '{
   {id:"00000000000000000000000000000009",name:"_externaldns.a-app.example.test",type:"TXT",content:"heritage=external-dns,external-dns/owner=example.test"}
  ] | map({ttl:300,proxied:false,comment:null,tags:[],settings:{}}+.)
 }' > "$scratch/snapshot.json"
+# Exercise the production selector against complete synthetic DNS snapshots.
 build() {
  jq --arg zone example.test --arg revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa -f "$root/scripts/email-dns-proposal.jq" "$1"
 }
@@ -81,6 +82,7 @@ printf '%s\n' 'PASS: native variables preserve the complete proposed DNS values'
 
 jq '.imports + [{address:"cloudflare_zone.primary",id:"11111111111111111111111111111111"},{address:"cloudflare_r2_bucket.buckets[\"cloudflare-bootstrap-state\"]",id:"22222222222222222222222222222222/cloudflare-bootstrap-state/default"}]' "$scratch/proposal.json" > "$scratch/imports.json"
 jq -n --slurpfile wanted "$scratch/imports.json" '{errored:false,resource_changes:[$wanted[0][]|. as $r|{address,mode:"managed",type:(if .address=="cloudflare_zone.primary" then "cloudflare_zone" elif (.address|startswith("cloudflare_r2_bucket.")) then "cloudflare_r2_bucket" else "cloudflare_dns_record" end),change:{actions:["no-op"],before:{id:(if .address=="cloudflare_zone.primary" then .id else (.id|split("/")[1]) end)},after:{id:(if .address=="cloudflare_zone.primary" then .id else (.id|split("/")[1]) end)},after_unknown:{}}}]}' > "$scratch/plan.json"
+# Exercise the production no-change guard against explicit imported-plan fixtures.
 check_plan() { jq -e --slurpfile wanted "$scratch/imports.json" -f "$root/scripts/check-email-dns-plan.jq" "$1" >/dev/null; }
 check_plan "$scratch/plan.json"
 for mutation in \
