@@ -307,6 +307,35 @@ clean-environment recovery, later imports or general automation readiness.
     the state lock, confirm a second `tofu plan -lock-timeout=0s` fails to
     acquire it; a second plan that proceeds means locking is not in effect.
 
+## Isolated native alert-journal proof
+
+The opt-in **Alert journal native R2 proof** workflow validates the existing
+[journal implementation](https://github.com/devantler-tech/platform/pull/5329)
+against actual R2 conditional writes before alert-route activation. Dispatch
+once from reviewed `main` with `PROVE_ALERT_JOURNAL`. It compiles the fixed,
+reviewed Platform revision before restoring the existing CI credential.
+
+The workflow obtains a fifteen-minute session restricted to one synthetic proof
+object in the independently managed state bucket. It first requires that object
+to be absent and verifies that the same session cannot read infrastructure-state
+metadata. It then runs the journal's existing native test for competing writers,
+a lost acknowledgement and a process exit after persisting an intent. The
+parent credential never enters the test process; no new permanent token is
+created. Infrastructure state, provider resources and DNS remain unchanged.
+
+The proof object is retained. Never delete or overwrite it to repeat a failed
+trial: inspect the encrypted evidence and establish its actual outcome first.
+Only authenticated ciphertext and source/run binding metadata leave private
+runner scratch. Download the one-day `encrypted-alert-journal-native-proof`
+artifact and decrypt it with the independently held infrastructure identity.
+Verify its source/run, the pinned journal source, successful native receipt,
+positive authentication and scope-denial observations before accepting it.
+
+This tests the storage protocol, not production journal custody, rotation,
+retention, route cutovers or user notification delivery. Those remain under
+[the alerting migration](https://github.com/devantler-tech/platform/issues/4683).
+Do not configure the infrastructure-state bucket as the production journal.
+
 ## Recovery
 
 Retrieve short-lived Cloudflare and R2 state credentials from the independent
