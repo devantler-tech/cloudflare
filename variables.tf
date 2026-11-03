@@ -11,14 +11,20 @@ variable "zone_name" {
 variable "dns_records" {
   description = "Authoritative DNS records keyed by a stable logical name."
   type = map(object({
-    name     = string
-    type     = string
-    content  = optional(string)
-    ttl      = optional(number, 1)
-    proxied  = optional(bool, false)
-    priority = optional(number)
-    comment  = optional(string, "Managed by devantler-tech/cloudflare")
-    tags     = optional(set(string), ["owner:cloudflare-repo"])
+    name            = string
+    type            = string
+    content         = optional(string)
+    ttl             = optional(number, 1)
+    proxied         = optional(bool, false)
+    priority        = optional(number)
+    comment         = optional(string)
+    tags            = optional(set(string), [])
+    private_routing = optional(bool)
+    settings = optional(object({
+      flatten_cname = optional(bool)
+      ipv4_only     = optional(bool)
+      ipv6_only     = optional(bool)
+    }))
   }))
   default = {}
 }
