@@ -50,3 +50,47 @@ run "reject_short_retention" {
 
   expect_failures = [var.r2_buckets]
 }
+
+run "reject_fractional_retention" {
+  command = plan
+
+  variables {
+    r2_buckets = {
+      audit-archive = {
+        retention_lock_days = 90.5
+      }
+    }
+  }
+
+  expect_failures = [var.r2_buckets]
+}
+
+run "reject_retention_in_us" {
+  command = plan
+
+  variables {
+    r2_buckets = {
+      audit-archive = {
+        jurisdiction        = "us"
+        retention_lock_days = 90
+      }
+    }
+  }
+
+  expect_failures = [var.r2_buckets]
+}
+
+run "reject_retention_in_fedramp_high" {
+  command = plan
+
+  variables {
+    r2_buckets = {
+      audit-archive = {
+        jurisdiction        = "fedramp-high"
+        retention_lock_days = 90
+      }
+    }
+  }
+
+  expect_failures = [var.r2_buckets]
+}

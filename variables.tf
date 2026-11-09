@@ -48,6 +48,15 @@ variable "r2_buckets" {
     ])
     error_message = "An archive retention lock requires a whole number of days, with a minimum of 90."
   }
+
+  # These are the lock jurisdictions accepted by the pinned Cloudflare provider.
+  validation {
+    condition = alltrue([
+      for bucket in values(var.r2_buckets) :
+      bucket.retention_lock_days == null || contains(["default", "eu", "fedramp"], lower(bucket.jurisdiction))
+    ])
+    error_message = "The pinned Cloudflare provider supports archive retention locks in the default, eu and fedramp jurisdictions."
+  }
 }
 
 variable "r2_lifecycle_rules" {
