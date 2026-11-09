@@ -30,3 +30,4 @@ bash scripts/check-recovery-package.sh "$repo_root"
 tofu fmt -check -recursive
 tofu init -backend=false -input=false
 tofu validate
+tofu test

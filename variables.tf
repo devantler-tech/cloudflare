@@ -32,11 +32,31 @@ variable "dns_records" {
 variable "r2_buckets" {
   description = "R2 buckets keyed by their immutable bucket name."
   type = map(object({
-    jurisdiction  = optional(string, "default")
-    location      = optional(string)
-    storage_class = optional(string, "Standard")
+    jurisdiction        = optional(string, "default")
+    location            = optional(string)
+    storage_class       = optional(string, "Standard")
+    retention_lock_days = optional(number)
   }))
   default = {}
+
+  validation {
+    condition = alltrue([
+      for bucket in values(var.r2_buckets) :
+      bucket.retention_lock_days == null ? true : (
+        bucket.retention_lock_days >= 90 && floor(bucket.retention_lock_days) == bucket.retention_lock_days
+      )
+    ])
+    error_message = "An archive retention lock requires a whole number of days, with a minimum of 90."
+  }
+
+  # These are the lock jurisdictions accepted by the pinned Cloudflare provider.
+  validation {
+    condition = alltrue([
+      for bucket in values(var.r2_buckets) :
+      bucket.retention_lock_days == null || contains(["default", "eu", "fedramp"], lower(bucket.jurisdiction))
+    ])
+    error_message = "The pinned Cloudflare provider supports archive retention locks in the default, eu and fedramp jurisdictions."
+  }
 }
 
 variable "r2_lifecycle_rules" {
