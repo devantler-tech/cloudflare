@@ -40,6 +40,30 @@ resource "cloudflare_r2_bucket" "buckets" {
   }
 }
 
+resource "cloudflare_r2_bucket_lock" "retention" {
+  for_each = {
+    for name, bucket in var.r2_buckets : name => bucket
+    if bucket.retention_lock_days != null
+  }
+
+  account_id   = var.account_id
+  bucket_name  = cloudflare_r2_bucket.buckets[each.key].name
+  jurisdiction = cloudflare_r2_bucket.buckets[each.key].jurisdiction
+  rules = [{
+    id      = "archive-retention"
+    enabled = true
+    prefix  = ""
+    condition = {
+      type            = "Age"
+      max_age_seconds = each.value.retention_lock_days * 86400
+    }
+  }]
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "cloudflare_r2_bucket_lifecycle" "rules" {
   for_each = var.r2_lifecycle_rules
 
