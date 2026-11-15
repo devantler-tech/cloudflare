@@ -203,7 +203,11 @@ capture before || stop
 stage=apply
 apply_rc=0
 tf provider apply -input=false -lock-timeout=0s -no-color change.tfplan > "$scratch/evidence/apply.log" 2>&1 || apply_rc=$?
-# Capture whatever the apply left behind before judging it.
+# Capture whatever the apply left behind before judging it. When OpenTofu
+# cannot save to R2 it writes errored.tfstate; keep that in the encrypted
+# evidence first, because the remote copy may then be older than the zone.
+stage=errored-state
+if [[ -f $scratch/work/errored.tfstate ]]; then cp "$scratch/work/errored.tfstate" "$scratch/evidence/errored.tfstate"; fi
 stage=after-capture
 capture after || stop
 stage=apply

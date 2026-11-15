@@ -43,7 +43,8 @@ jq -n --arg zone "$zone" '{zone:{id:$zone}, records:[
   {id:"00000000000000000000000000000004",name:"dup.devantler.tech",type:"TXT",content:"\"same\""},
   {id:"00000000000000000000000000000005",name:"dup.devantler.tech",type:"TXT",content:"\"same\""},
   {id:"00000000000000000000000000000006",name:"portal.devantler.tech",type:"A",content:"192.0.2.1"},
-  {id:"00000000000000000000000000000007",name:"_externaldns.a-portal.devantler.tech",type:"TXT",content:"\"heritage=external-dns\""}
+  {id:"00000000000000000000000000000007",name:"_externaldns.a-portal.devantler.tech",type:"TXT",content:"\"heritage=external-dns\""},
+  {id:"00000000000000000000000000000008",name:"_externaldns.a-ghost.devantler.tech",type:"TXT",content:"\"heritage=external-dns\""}
 ]}' > "$scratch/snapshot.json"
 create() { jq -n --arg address "$1" --arg name "$2" --arg type "$3" --arg content "$4" \
   '{address:$address,mode:"managed",type:"cloudflare_dns_record",change:{actions:["create"],after:{name:$name,type:$type,content:$content}}}'; }
@@ -55,7 +56,8 @@ jq -e --arg zone "$zone" '.refused==[] and .imports==[
   {address:"cloudflare_dns_record.mail_mx_01",id:($zone+"/00000000000000000000000000000001")},
   {address:"cloudflare_dns_record.mail_spf",id:($zone+"/00000000000000000000000000000002")}]' <<<"$result" >/dev/null
 for refusal in content-differs:devantler.tech:TXT:'"v=spf1 -all"' ambiguous:dup.devantler.tech:TXT:'"same"' \
-  external-dns-owned:portal.devantler.tech:A:192.0.2.1 external-dns-owned:_externaldns.a-portal.devantler.tech:TXT:'"heritage=external-dns"'; do
+  external-dns-owned:portal.devantler.tech:A:192.0.2.1 external-dns-owned:_externaldns.a-portal.devantler.tech:TXT:'"heritage=external-dns"' \
+  external-dns-owned:ghost.devantler.tech:A:192.0.2.9 content-differs:Devantler.tech.:TXT:'"v=spf1 -all"' content-differs:@:MX:mx99.example.test; do
   IFS=: read -r reason name type content <<<"$refusal"
   result=$(create cloudflare_dns_record.case "$name" "$type" "$content" | resolve)
   jq -e --arg reason "$reason" '.imports==[] and .refused==[{address:"cloudflare_dns_record.case",refused:$reason}]' <<<"$result" >/dev/null
@@ -90,6 +92,9 @@ printf '%s\n' "$zone_noop" | reject missing-import
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.mail_spf cloudflare_dns_record '["delete","create"]' "$record" "$record" null; } | reject replace
 { printf '%s\n' "$noop_import"; change cloudflare_zone.primary cloudflare_zone '["update"]' '{"a":1}' '{"a":2}' null; } | reject zone-update
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.bad cloudflare_dns_record '["create"]' null '{"name":"_externaldns.devantler.tech","type":"TXT","content":"x"}' null; } | reject typeless-apex-registry
+for name in _externaldns _EXTERNALDNS.devantler.tech. _externaldns.Devantler.Tech; do
+  { printf '%s\n' "$noop_import"; change cloudflare_dns_record.bad cloudflare_dns_record '["create"]' null "{\"name\":\"$name\",\"type\":\"TXT\",\"content\":\"x\"}" null; } | reject "typeless-apex-registry $name"
+done
 printf '%s\n' "$noop_import" | jq -s '{errored:true,resource_changes:.}' | if check; then exit 1; fi
 printf '%s\n' "$noop_import" | jq -s '{deferred_changes:[{}],resource_changes:.}' | if check; then exit 1; fi
 printf '%s\n' 'PASS: DNS plans admit unchanged imports, creates, updates and forgets only'
