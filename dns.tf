@@ -11,14 +11,19 @@
 
 # The site entry points. They stay separate resources so a reviewed change can
 # hand one to external-dns with a `removed` block that keeps the record.
+#
+# The apex follows www, which external-dns points at the platform gateway, so
+# the site keeps working if the gateway address changes. It was already a
+# CNAME, so this is an in-place edit of one record and never leaves a gap.
+# Roll back by restoring `devantler.github.io` with `proxied = false`.
 resource "cloudflare_dns_record" "apex" {
   zone_id  = cloudflare_zone.primary.id
   name     = "devantler.tech"
   type     = "CNAME"
-  content  = "devantler.github.io"
+  content  = "www.devantler.tech"
   ttl      = 1
-  proxied  = false
-  comment  = "GitHub Pages Personal"
+  proxied  = true
+  comment  = "Follows www to the platform gateway"
   settings = { flatten_cname = false }
 }
 
