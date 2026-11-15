@@ -28,31 +28,10 @@ resource "cloudflare_dns_record" "apex" {
 }
 
 # external-dns serves www from the business site's public route. It took over
-# the old www CNAME through a one-time ownership record (forgotten below) and
-# replaced it with the gateway addresses. Its own ownership records for those
-# addresses then disappeared, so these two restore them with external-dns's
-# exact content. external-dns re-owns the existing www records without
-# changing them. .github/dns-handover.json lists the two records they claim.
-resource "cloudflare_dns_record" "www_external_dns_owner_a" {
-  zone_id  = cloudflare_zone.primary.id
-  name     = "_externaldns.a-www.devantler.tech"
-  type     = "TXT"
-  content  = "\"heritage=external-dns,external-dns/owner=platform.devantler.tech,external-dns/resource=httproute/business-site/business-site-public\""
-  ttl      = 1
-  proxied  = false
-  settings = {}
-}
-
-resource "cloudflare_dns_record" "www_external_dns_owner_aaaa" {
-  zone_id  = cloudflare_zone.primary.id
-  name     = "_externaldns.aaaa-www.devantler.tech"
-  type     = "TXT"
-  content  = "\"heritage=external-dns,external-dns/owner=platform.devantler.tech,external-dns/resource=httproute/business-site/business-site-public\""
-  ttl      = 1
-  proxied  = false
-  settings = {}
-}
-
+# the old www CNAME through a one-time ownership record (forgotten below),
+# replaced it with the gateway addresses and owns them through its own
+# `_externaldns.a-www` and `_externaldns.aaaa-www` records. This repository
+# manages none of them.
 removed {
   from = cloudflare_dns_record.www_external_dns_owner
 

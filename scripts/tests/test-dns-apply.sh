@@ -156,10 +156,9 @@ for list in '{"externalDnsHandover":[{"type":"a","name":"www.devantler.tech"}]}'
   printf '%s\n' "$list" > "$scratch/handover.json"
   { printf '%s\n' "$noop_import"; marker _externaldns.a-www.devantler.tech; } | reject "invalid handover list $list"
 done
-# The repository's own list is valid and admits exactly the www handover it was written for.
+# The repository's own list is valid, so a typo in it cannot stop every DNS run.
 cp "$root/.github/dns-handover.json" "$scratch/handover.json"
-{ printf '%s\n' "$noop_import"; marker _externaldns.a-www.devantler.tech
-  change cloudflare_dns_record.marker_aaaa cloudflare_dns_record '["create"]' null '{"name":"_externaldns.aaaa-www.devantler.tech","type":"TXT","content":"x"}' null; } | plan | check
+printf '%s\n' "$noop_import" | plan | check
 printf '%s\n' '{"externalDnsHandover":[]}' > "$scratch/handover.json"
 # A record external-dns owns is never written here, and every write has a known
 # name (OpenTofu writes an unknown value as null).
