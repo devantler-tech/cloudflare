@@ -336,6 +336,74 @@ retention, route cutovers or user notification delivery. Those remain under
 [the alerting migration](https://github.com/devantler-tech/platform/issues/4683).
 Do not configure the infrastructure-state bucket as the production journal.
 
+## DNS changes
+
+The records this repository owns are declared in `dns.tf`. Records that the
+platform's external-dns owns stay with it, together with their `_externaldns.`
+TXT registry. That includes the Email sender's SES `bounce` records.
+Certificate challenges stay with their issuer. Never declare the typeless
+`_externaldns.devantler.tech`: external-dns would read it as owning the apex,
+then delete the apex MX and TXT records that company Email depends on. The
+plan check refuses it.
+
+Every change is a reviewed pull request, then two dispatches of **DNS plan and
+guarded apply** from `main` at that merged revision:
+
+1. `mode=plan`, confirmation `PLAN_DNS`. This changes nothing.
+2. `mode=apply`, confirmation `APPLY_DNS`, after reading the plan's summary.
+
+Both runs work against the authoritative R2 state through a 15-minute storage
+session derived from the existing `CLOUDFLARE_API_TOKEN`; the configuration
+comes from `CLOUDFLARE_BOOTSTRAP_CONFIGURATION`. The live state must still be
+exactly the retained `recovery/backend-source/` generation, so an earlier apply
+that was not yet retained refuses every new run. A declared record that the
+plan would create is imported when exactly one live record that nothing here
+manages yet has the same name, type and content. It stays a real create only
+when no such record has that name and type. A changed content, more than one
+match, a record already managed here, or a record that external-dns owns
+refuses the run.
+
+The saved plan must then pass `scripts/assert-no-destructive-plan.sh` and
+`scripts/check-dns-plan.jq`. Only DNS records may change. Imports must leave
+their record exactly as it is. Creates, updates and `removed` blocks with
+`destroy = false` are admitted; deletes and replacements are not. A created or
+updated record must have a known name and must not be owned by external-dns.
+An `_externaldns.` ownership record must claim at least one live record, and
+only records the same plan stops managing, so it can never hand a mail record,
+or any record nothing here manages, to external-dns. The public
+log shows `DNS_PLAN` and `DNS_DRIFT` lines, with the `dns.tf` addresses,
+actions and changed attribute names, plus counts for anything keyed by the
+private configuration and one `DNS_UNMANAGED` count, by type, of live records
+that nothing owns. Names, values, identifiers and tool output stay in the
+encrypted evidence.
+
+In apply mode the run encrypts the state before and after the apply, even
+when the apply fails, and then requires a clean plan. The script never force-kills
+the apply, because a killed apply would leave the R2 lock and unrecorded
+changes behind. After a successful apply, a second job initializes from R2 on
+a fresh runner and must also find nothing to change. Afterwards,
+download the `encrypted-dns-change` and `encrypted-dns-recovery` artifacts,
+authenticate the `after` and `recovered` packages with the independent
+identity (`check-state-recovery-package.sh --identity-file`), and retain the
+`after` package in `recovery/backend-source/` through a signed pull request:
+a data-only one, or the next DNS change. The configuration does not change, so the configuration secret stays
+as it is. The next DNS change is possible only after that pull request merges.
+
+If an apply fails or stops part-way, do not dispatch again. The state has
+moved on, so every new run is refused until it is retained. Authenticate the
+`after` package from `encrypted-dns-change`, and the `errored.tfstate` in its
+evidence if OpenTofu could not save to R2. Compare the state with the live zone
+and retain the package that matches what Cloudflare actually holds. Then
+dispatch a plan to see what is still pending.
+
+To hand a record to external-dns without a gap, create its ownership TXT
+record and replace the record's resource with a `removed` block that keeps the
+record (`lifecycle { destroy = false }`), in the same change. Forget the
+ownership record in the next change, because external-dns then owns it. To undo an
+apply, revert its pull request and run the same two dispatches; a revert that
+would delete a record is refused, so restore deleted values by declaring them
+again.
+
 ## Recovery
 
 Retrieve short-lived Cloudflare and R2 state credentials from the independent

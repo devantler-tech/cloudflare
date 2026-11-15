@@ -85,8 +85,13 @@ the local checks, and what a pull request needs before it can merge.
 The configuration is deliberately import-first. The manual state-bootstrap
 workflow defaults to checking independent encrypted recovery publication. Its
 apply mode accepts only the frozen, reviewed first proposal and requires a
-successful custody check from that same main revision. General applies remain
-disabled until inventory, imports, remote locking and recovery pass their gates.
+successful custody check from that same main revision.
+
+DNS records are declared in [`dns.tf`](dns.tf) and change only through the
+manual **DNS plan and guarded apply** workflow: plan first, then apply the same
+reviewed revision. It imports declared records that already exist, never
+deletes or replaces anything, and keeps an encrypted state copy from before and
+after every apply. Other resources still have no general apply path.
 
 The ownership decision and dependency boundary are recorded in
 [`docs/adr/0001-cluster-independent-cloudflare-owner.md`](docs/adr/0001-cluster-independent-cloudflare-owner.md).
