@@ -5,6 +5,12 @@
 # no external-dns ownership record claims it. Anything else is refused, so a
 # typo or drift can never add a second mail record, adopt a record twice, or
 # take over an external-dns record.
+#
+# The zone's single-instance settings in zone.tf always exist, so a planned
+# create of one of them is always an import of the live setting: the bot
+# management configuration by zone, and an allowed zone setting by zone and
+# setting name. Any other setting is left to fail at the plan check.
+def zone_settings: ["email_obfuscation"];
 def fqdn: ascii_downcase | rtrimstr(".") |
   if .=="@" then "devantler.tech"
   elif .=="devantler.tech" or endswith(".devantler.tech") then .
@@ -33,7 +39,15 @@ $snapshot[0] as $live |
   elif ($exact|length)>1 then {address, refused:"ambiguous"}
   elif ($same|length)>0 then {address, refused:"content-differs"}
   else empty end
-] as $resolved |
+] as $records |
+[.resource_changes[] |
+  select(.mode=="managed" and .change.actions==["create"]) |
+  if .type=="cloudflare_bot_management" then {address, id:$live.zone.id}
+  elif .type=="cloudflare_zone_setting" and (.change.after.setting_id|IN(zone_settings[])) then
+    {address, id:($live.zone.id+"/"+.change.after.setting_id)}
+  else empty end
+] as $settings |
+($records + $settings) as $resolved |
 ([$resolved[]|select(has("id"))|.id]) as $ids |
 {
   imports:[$resolved[]|select(has("id"))]|sort_by(.address),

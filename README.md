@@ -87,7 +87,8 @@ workflow defaults to checking independent encrypted recovery publication. Its
 apply mode accepts only the frozen, reviewed first proposal and requires a
 successful custody check from that same main revision.
 
-DNS records are declared in [`dns.tf`](dns.tf) and change only through the
+DNS records are declared in [`dns.tf`](dns.tf), and the zone settings that would
+rewrite proxied pages in [`zone.tf`](zone.tf). Both change only through the
 manual **DNS plan and guarded apply** workflow: plan first, then apply the same
 reviewed revision. It imports declared records that already exist, never
 deletes or replaces anything, and keeps an encrypted state copy from before and

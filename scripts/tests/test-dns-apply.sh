@@ -173,6 +173,31 @@ printf '%s\n' "$noop_import" | jq -s '{errored:true,resource_changes:.}' | if ch
 printf '%s\n' "$noop_import" | jq -s '{deferred_changes:[{}],resource_changes:.}' | if check; then exit 1; fi
 printf '%s\n' 'PASS: DNS plans admit unchanged imports, creates, updates and forgets only'
 
+# 3b. The zone's single-instance settings are always imported, may then be updated,
+# and are never created, forgotten or widened to other zone settings.
+setting() { jq -n --arg address "$1" --arg type "$2" --arg setting "$3" '{address:$address,mode:"managed",type:$type,change:{actions:["create"],after:({zone_id:null} + (if $setting=="" then {} else {setting_id:$setting,value:"off"} end))}}'; }
+result=$( { setting cloudflare_bot_management.primary cloudflare_bot_management ""
+  setting cloudflare_zone_setting.email_obfuscation cloudflare_zone_setting email_obfuscation
+  setting cloudflare_zone_setting.rocket_loader cloudflare_zone_setting rocket_loader; } | resolve)
+jq -e --arg zone "$zone" '.refused==[] and .imports==[
+  {address:"cloudflare_bot_management.primary",id:$zone},
+  {address:"cloudflare_zone_setting.email_obfuscation",id:($zone+"/email_obfuscation")}]' <<<"$result" >/dev/null
+printf '%s\n' "[{\"address\":\"cloudflare_bot_management.primary\",\"id\":\"$zone\"},{\"address\":\"cloudflare_zone_setting.email_obfuscation\",\"id\":\"$zone/email_obfuscation\"}]" > "$scratch/imports.json"
+bot_import=$(change cloudflare_bot_management.primary cloudflare_bot_management '["update"]' '{"fight_mode":true,"enable_js":true}' '{"fight_mode":false,"enable_js":false}' "{\"id\":\"$zone\"}")
+obfuscation_import=$(change cloudflare_zone_setting.email_obfuscation cloudflare_zone_setting '["update"]' '{"setting_id":"email_obfuscation","value":"on"}' '{"setting_id":"email_obfuscation","value":"off"}' "{\"id\":\"$zone/email_obfuscation\"}")
+printf '%s\n' "$bot_import" "$obfuscation_import" | plan | check
+# The import list names only the other resource, so only the action rule can refuse these.
+printf '%s\n' "[{\"address\":\"cloudflare_zone_setting.email_obfuscation\",\"id\":\"$zone/email_obfuscation\"}]" > "$scratch/imports.json"
+{ printf '%s\n' "$obfuscation_import"; change cloudflare_bot_management.primary cloudflare_bot_management '["create"]' null '{"fight_mode":false}' null; } | reject "created bot management"
+printf '%s\n' "[{\"address\":\"cloudflare_bot_management.primary\",\"id\":\"$zone\"}]" > "$scratch/imports.json"
+{ printf '%s\n' "$bot_import"; change cloudflare_zone_setting.email_obfuscation cloudflare_zone_setting '["forget"]' '{"setting_id":"email_obfuscation","value":"on"}' null null; } | reject "forgotten zone setting"
+printf '%s\n' "[{\"address\":\"cloudflare_bot_management.primary\",\"id\":\"$zone\"},{\"address\":\"cloudflare_zone_setting.email_obfuscation\",\"id\":\"$zone/email_obfuscation\"}]" > "$scratch/imports.json"
+{ printf '%s\n' "$bot_import" "$obfuscation_import"
+  change cloudflare_zone_setting.rocket_loader cloudflare_zone_setting '["update"]' '{"setting_id":"rocket_loader","value":"off"}' '{"setting_id":"rocket_loader","value":"on"}' null; } | reject "update of an unlisted zone setting"
+printf '%s\n' "$bot_import" | reject "missing zone-setting import"
+printf '%s\n' "[{\"address\":\"cloudflare_dns_record.mail_mx_01\",\"id\":\"$import_id\"}]" > "$scratch/imports.json"
+printf '%s\n' 'PASS: zone settings are imported, may be updated, and never created, forgotten or widened'
+
 # 4. The declared mail records are the ones the company Email depends on.
 grep -q 'content  = "mx01.mail.icloud.com"' "$root/dns.tf"
 grep -q 'content  = "mx02.mail.icloud.com"' "$root/dns.tf"
