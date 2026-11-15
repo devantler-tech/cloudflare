@@ -5,10 +5,11 @@
 # known and leaves its record exactly as it is. A created or updated record
 # has a known name and an upper-case type, and external-dns owns it neither
 # before nor after the change. Its name uses only hostname characters. An
-# external-dns ownership record must claim at least one live record, and every
-# live record it claims must be one this plan stops managing. Otherwise it
-# could hand a mail record, or a record nothing here manages, to external-dns,
-# which would delete it. The typeless apex registry name is always refused,
+# external-dns ownership record must claim at least one live record. Every live
+# record it claims must be one this plan stops managing, or one that nothing
+# here manages and that the reviewed $handover[0] list (.github/dns-handover.json)
+# names. Otherwise it could hand a mail record, or any other record, to
+# external-dns, which would delete it. The typeless apex registry name is always refused,
 # because it claims every apex record, the Email MX and TXT records included.
 def fqdn: ascii_downcase | rtrimstr(".") |
   if .=="@" then "devantler.tech"
@@ -27,6 +28,11 @@ def claims:
 def hits($claim): (.name|fqdn)==$claim.name and ($claim.type==null or (.type|ascii_downcase)==$claim.type);
 def writes: .change.actions==["create"] or .change.actions==["update"];
 . as $plan | $imports[0] as $wanted | $snapshot[0].records as $live |
+($handover[0] | if type=="object" and keys==["externalDnsHandover"] and (.externalDnsHandover|type=="array" and length<=20) and
+   all(.externalDnsHandover[]; type=="object" and keys==["name","type"] and (.type|IN("A","AAAA","CNAME")) and
+     (.name|type=="string" and test("\\A[A-Za-z0-9.-]+\\z")))
+ then [.externalDnsHandover[] | {name:(.name|fqdn), type:(.type|ascii_downcase)}]
+ else error("dns-handover: invalid list") end) as $listed |
 [.resource_changes[] | select(.type=="cloudflare_dns_record" and .change.actions!=["forget"]) |
   .change.after // .change.before | select(type=="object") |
   {name:(.name // "" | fqdn), type:(.type // "" | ascii_downcase)}] as $kept |
@@ -58,7 +64,10 @@ all(.resource_changes[];
      (if ($after.type=="TXT" and ($after.name|fqdn|startswith("_externaldns."))) then
         ($after|claims) as $claims |
         [$live[] | . as $r | select(any($claims[]; . as $c | $r|hits($c)))] as $claimed |
-        ($claimed|length)>0 and all($claimed[]; .id|IN($forgotten[])) and
+        ($claimed|length)>0 and
+        all($claimed[]; (.id|IN($forgotten[])) or
+          ({name:(.name|fqdn), type:(.type|ascii_downcase)} as $record |
+            ($record|IN($listed[])) and ($after.name|fqdn)=="_externaldns."+$record.type+"-"+$record.name)) and
         all($claims[]; . as $claim |
           all($kept[]; .name!=$claim.name or ($claim.type!=null and .type!=$claim.type)))
       else ($after|owned($live)|not) end)

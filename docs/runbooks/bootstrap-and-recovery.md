@@ -368,9 +368,11 @@ The saved plan must then pass `scripts/assert-no-destructive-plan.sh` and
 their record exactly as it is. Creates, updates and `removed` blocks with
 `destroy = false` are admitted; deletes and replacements are not. A created or
 updated record must have a known name and must not be owned by external-dns.
-An `_externaldns.` ownership record must claim at least one live record, and
-only records the same plan stops managing, so it can never hand a mail record,
-or any record nothing here manages, to external-dns. The public
+An `_externaldns.` ownership record must claim at least one live record. Each
+record it claims must be one the same plan stops managing, or one nothing here
+manages that `.github/dns-handover.json` names. That reviewed list hands a
+record to external-dns explicitly, so a marker can never hand over a mail
+record, or any record nobody chose, by accident. The public
 log shows `DNS_PLAN` and `DNS_DRIFT` lines, with the `dns.tf` addresses,
 actions and changed attribute names, plus counts for anything keyed by the
 private configuration and one `DNS_UNMANAGED` count, by type, of live records

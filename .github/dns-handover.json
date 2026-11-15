@@ -1,0 +1,6 @@
+{
+  "externalDnsHandover": [
+    { "type": "A", "name": "www.devantler.tech" },
+    { "type": "AAAA", "name": "www.devantler.tech" }
+  ]
+}
