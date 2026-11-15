@@ -30,7 +30,7 @@ def writes: .change.actions==["create"] or .change.actions==["update"];
 . as $plan | $imports[0] as $wanted | $snapshot[0].records as $live |
 ($handover[0] | if type=="object" and keys==["externalDnsHandover"] and (.externalDnsHandover|type=="array" and length<=20) and
    all(.externalDnsHandover[]; type=="object" and keys==["name","type"] and (.type|IN("A","AAAA","CNAME")) and
-     (.name|type=="string" and test("\\A[A-Za-z0-9_.-]+\\z")))
+     (.name|type=="string" and test("\\A[A-Za-z0-9.-]+\\z")))
  then [.externalDnsHandover[] | {name:(.name|fqdn), type:(.type|ascii_downcase)}]
  else error("dns-handover: invalid list") end) as $listed |
 [.resource_changes[] | select(.type=="cloudflare_dns_record" and .change.actions!=["forget"]) |
@@ -65,7 +65,9 @@ all(.resource_changes[];
         ($after|claims) as $claims |
         [$live[] | . as $r | select(any($claims[]; . as $c | $r|hits($c)))] as $claimed |
         ($claimed|length)>0 and
-        all($claimed[]; (.id|IN($forgotten[])) or ({name:(.name|fqdn), type:(.type|ascii_downcase)}|IN($listed[]))) and
+        all($claimed[]; (.id|IN($forgotten[])) or
+          ({name:(.name|fqdn), type:(.type|ascii_downcase)} as $record |
+            ($record|IN($listed[])) and ($after.name|fqdn)=="_externaldns."+$record.type+"-"+$record.name)) and
         all($claims[]; . as $claim |
           all($kept[]; .name!=$claim.name or ($claim.type!=null and .type!=$claim.type)))
       else ($after|owned($live)|not) end)

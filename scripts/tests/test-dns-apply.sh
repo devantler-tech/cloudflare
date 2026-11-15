@@ -48,7 +48,8 @@ jq -n --arg zone "$zone" '{zone:{id:$zone}, records:[
   {id:"00000000000000000000000000000009",name:"www.devantler.tech",type:"CNAME",content:"pages.example.test"},
   {id:"0000000000000000000000000000000a",name:"sig1._domainkey.devantler.tech",type:"CNAME",content:"dkim.example.test"},
   {id:"0000000000000000000000000000000b",name:"sig2._domainkey.devantler.tech",type:"CNAME",content:"dkim2.example.test"},
-  {id:"0000000000000000000000000000000c",name:"www.devantler.tech",type:"A",content:"192.0.2.10"}
+  {id:"0000000000000000000000000000000c",name:"www.devantler.tech",type:"A",content:"192.0.2.10"},
+  {id:"0000000000000000000000000000000d",name:"www.devantler.tech",type:"AAAA",content:"2001:db8::10"}
 ]}' > "$scratch/snapshot.json"
 create() { jq -n --arg address "$1" --arg name "$2" --arg type "$3" --arg content "$4" \
   '{address:$address,mode:"managed",type:"cloudflare_dns_record",change:{actions:["create"],after:{name:$name,type:$type,content:$content}}}'; }
@@ -143,11 +144,22 @@ printf '%s\n' '{"externalDnsHandover":[{"type":"A","name":"www.devantler.tech"}]
 { printf '%s\n' "$noop_import"; marker _externaldns.cname-sig2._domainkey.devantler.tech; } | reject "handover of an unlisted record"
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.www_a cloudflare_dns_record '["no-op"]' '{"name":"www.devantler.tech","type":"A","content":"192.0.2.10"}' '{"name":"www.devantler.tech","type":"A","content":"192.0.2.10"}' null
   marker _externaldns.a-www.devantler.tech; } | reject "listed record that is still declared here"
+{ printf '%s\n' "$noop_import"; marker _externaldns.cname-www.devantler.tech; } | reject "listed name, unlisted type"
+# A listed record may only be claimed by its own typed marker, never a wider typeless one.
+printf '%s\n' '{"externalDnsHandover":[{"type":"A","name":"www.devantler.tech"},{"type":"AAAA","name":"www.devantler.tech"},{"type":"CNAME","name":"www.devantler.tech"}]}' > "$scratch/handover.json"
+{ printf '%s\n' "$noop_import"; marker _externaldns.www.devantler.tech; } | reject "typeless marker for listed records"
+twenty_one=$(jq -cn '{externalDnsHandover:([{type:"A",name:"www.devantler.tech"}] + [range(20)|{type:"A",name:"h\(.).devantler.tech"}])}')
 for list in '{"externalDnsHandover":[{"type":"a","name":"www.devantler.tech"}]}' '{"externalDnsHandover":[{"type":"TXT","name":"devantler.tech"}]}' \
-  '{"externalDnsHandover":[{"type":"A","name":"www.devantler.tech","extra":1}]}' '{"other":[]}'; do
+  '{"externalDnsHandover":[{"type":"A","name":"www.devantler.tech","extra":1}]}' '{"other":[]}' \
+  '{"externalDnsHandover":[{"type":"A","name":"www.devantler.tech"}],"extra":1}' "$twenty_one" \
+  '{"externalDnsHandover":[{"type":"A","name":"www.devantler.tech"},{"type":"CNAME","name":"sig2._domainkey.devantler.tech"}]}'; do
   printf '%s\n' "$list" > "$scratch/handover.json"
   { printf '%s\n' "$noop_import"; marker _externaldns.a-www.devantler.tech; } | reject "invalid handover list $list"
 done
+# The repository's own list is valid and admits exactly the www handover it was written for.
+cp "$root/.github/dns-handover.json" "$scratch/handover.json"
+{ printf '%s\n' "$noop_import"; marker _externaldns.a-www.devantler.tech
+  change cloudflare_dns_record.marker_aaaa cloudflare_dns_record '["create"]' null '{"name":"_externaldns.aaaa-www.devantler.tech","type":"TXT","content":"x"}' null; } | plan | check
 printf '%s\n' '{"externalDnsHandover":[]}' > "$scratch/handover.json"
 # A record external-dns owns is never written here, and every write has a known
 # name (OpenTofu writes an unknown value as null).
