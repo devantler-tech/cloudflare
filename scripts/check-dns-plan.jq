@@ -3,7 +3,8 @@
 # form, so a relative or differently written name cannot slip by.
 # Only DNS records may change. Nothing is deleted or replaced. Every import is
 # known and leaves its record exactly as it is. A created or updated record
-# has a known name, and external-dns does not own it. An external-dns
+# has a known name and an upper-case type, and external-dns owns it neither
+# before nor after the change. An external-dns
 # ownership record may only claim a record this plan stops managing: one that
 # claims a record still managed here, such as a mail record, would let
 # external-dns delete it. The typeless apex registry name is always refused,
@@ -47,7 +48,9 @@ all(.resource_changes[];
    elif writes then
      .change.after as $after |
      ($after.name|type=="string") and ($after.type|type=="string") and
+     $after.type==($after.type|ascii_upcase) and
      ($after.name|fqdn) != "_externaldns.devantler.tech" and
+     (if .change.actions==["update"] then (.change.before|owned($live)|not) else true end) and
      (if ($after.type=="TXT" and ($after.name|fqdn|startswith("_externaldns."))) then
         all($after|claims[]; . as $claim |
           all($kept[]; .name!=$claim.name or ($claim.type!=null and .type!=$claim.type)))

@@ -167,7 +167,8 @@ stage=discover
 plan_json discover || stop
 jq --slurpfile snapshot "$scratch/evidence/snapshot.json" -f "$root/scripts/dns-imports.jq" \
   "$scratch/evidence/discover.json" > "$scratch/evidence/resolved.json" 2>/dev/null || stop
-jq -r '.refused[]|"DNS_REFUSED address=\(.address) reason=\(.refused)"' "$scratch/evidence/resolved.json"
+# Refusals keyed by the private configuration are reported without their address.
+jq -r '.refused[] | if (.address|startswith("cloudflare_dns_record.records[")) then "DNS_REFUSED address=private reason=\(.refused)" else "DNS_REFUSED address=\(.address) reason=\(.refused)" end' "$scratch/evidence/resolved.json"
 jq -e '.refused==[]' "$scratch/evidence/resolved.json" >/dev/null 2>&1 || stop
 jq '.imports' "$scratch/evidence/resolved.json" > "$scratch/evidence/imports.json"
 jq -r '.[]|"import {\n  to = \(.address)\n  id = \(.id|tojson)\n}\n"' "$scratch/evidence/imports.json" > "$scratch/work/imports.tf"
