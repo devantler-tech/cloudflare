@@ -178,10 +178,12 @@ printf '%s\n' 'PASS: DNS plans admit unchanged imports, creates, updates and for
 setting() { jq -n --arg address "$1" --arg type "$2" --arg setting "$3" '{address:$address,mode:"managed",type:$type,change:{actions:["create"],after:({zone_id:null} + (if $setting=="" then {} else {setting_id:$setting,value:"off"} end))}}'; }
 result=$( { setting cloudflare_bot_management.primary cloudflare_bot_management ""
   setting cloudflare_zone_setting.email_obfuscation cloudflare_zone_setting email_obfuscation
+  setting cloudflare_zone_setting.nel cloudflare_zone_setting nel
   setting cloudflare_zone_setting.rocket_loader cloudflare_zone_setting rocket_loader; } | resolve)
 jq -e --arg zone "$zone" '.refused==[] and .imports==[
   {address:"cloudflare_bot_management.primary",id:$zone},
-  {address:"cloudflare_zone_setting.email_obfuscation",id:($zone+"/email_obfuscation")}]' <<<"$result" >/dev/null
+  {address:"cloudflare_zone_setting.email_obfuscation",id:($zone+"/email_obfuscation")},
+  {address:"cloudflare_zone_setting.nel",id:($zone+"/nel")}]' <<<"$result" >/dev/null
 printf '%s\n' "[{\"address\":\"cloudflare_bot_management.primary\",\"id\":\"$zone\"},{\"address\":\"cloudflare_zone_setting.email_obfuscation\",\"id\":\"$zone/email_obfuscation\"}]" > "$scratch/imports.json"
 bot_import=$(change cloudflare_bot_management.primary cloudflare_bot_management '["update"]' '{"fight_mode":true,"enable_js":true}' '{"fight_mode":false,"enable_js":false}' "{\"id\":\"$zone\"}")
 obfuscation_import=$(change cloudflare_zone_setting.email_obfuscation cloudflare_zone_setting '["update"]' '{"setting_id":"email_obfuscation","value":"on"}' '{"setting_id":"email_obfuscation","value":"off"}' "{\"id\":\"$zone/email_obfuscation\"}")

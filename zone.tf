@@ -24,6 +24,16 @@ resource "cloudflare_zone_setting" "email_obfuscation" {
   value      = "off"
 }
 
+# Network Error Logging makes visitors' browsers store a reporting policy for
+# seven days and send failed-connection reports to Cloudflare. Off, the site
+# stores nothing in the browser, so it raises no consent question (BEK
+# 1148/2011). The platform's own monitoring is unaffected (#84).
+resource "cloudflare_zone_setting" "nel" {
+  zone_id    = cloudflare_zone.primary.id
+  setting_id = "nel"
+  value      = { enabled = false }
+}
+
 resource "cloudflare_bot_management" "primary" {
   zone_id            = cloudflare_zone.primary.id
   fight_mode         = false
