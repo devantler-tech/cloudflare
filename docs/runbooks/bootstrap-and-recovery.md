@@ -367,8 +367,9 @@ The saved plan must then pass `scripts/assert-no-destructive-plan.sh` and
 their record exactly as it is. Creates, updates and `removed` blocks with
 `destroy = false` are admitted; deletes and replacements are not. The public
 log shows only `DNS_PLAN` lines, with addresses, actions and changed attribute
-names; `DNS_DRIFT` lines; and `DNS_UNMANAGED` lines for live records that
-nothing owns. Values, identifiers and tool output stay in the encrypted
+names; `DNS_DRIFT` lines; and one `DNS_UNMANAGED` count, by type, of live
+records that nothing owns. Their names, values, identifiers and tool output
+stay in the encrypted
 evidence.
 
 In apply mode the run encrypts the state before and after the apply, even

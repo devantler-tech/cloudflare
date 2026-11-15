@@ -183,17 +183,19 @@ jq -r '.resource_changes[] |
   (if $action=="update" or ($action=="import" and .change.actions!=["no-op"]) then " attributes=\($attributes|join(","))" else "" end)
 ' "$scratch/evidence/change.json"
 jq -r '.resource_drift[]? | "DNS_DRIFT address=\(.address) action=\(.change.actions|join("-"))"' "$scratch/evidence/change.json"
-# Live records that nothing owns: not declared here, not external-dns, not a challenge.
-jq -r --slurpfile plan "$scratch/evidence/change.json" --slurpfile imports "$scratch/evidence/imports.json" '
+# Live records that nothing owns: not declared here, not external-dns, not a
+# challenge. Their names stay in the encrypted evidence; the log gets counts.
+jq --slurpfile plan "$scratch/evidence/change.json" --slurpfile imports "$scratch/evidence/imports.json" '
   ([$plan[0].prior_state.values.root_module.resources[]? | select(.type=="cloudflare_dns_record") | .values.id] +
    [$imports[0][] | .id | split("/")[1]]) as $managed |
   .records as $records |
-  .records[] | . as $r |
-  select((.id|IN($managed[]))|not) |
-  select((.name|startswith("_externaldns.") or startswith("_acme-challenge."))|not) |
-  select(any($records[]; .type=="TXT" and (.name=="_externaldns."+$r.name or .name=="_externaldns."+($r.type|ascii_downcase)+"-"+$r.name))|not) |
-  "DNS_UNMANAGED name=\(.name) type=\(.type)"
-' "$scratch/evidence/snapshot.json"
+  [.records[] | . as $r |
+   select((.id|IN($managed[]))|not) |
+   select((.name|startswith("_externaldns.") or startswith("_acme-challenge."))|not) |
+   select(any($records[]; .type=="TXT" and (.name=="_externaldns."+$r.name or .name=="_externaldns."+($r.type|ascii_downcase)+"-"+$r.name))|not) |
+   {name, type}]
+' "$scratch/evidence/snapshot.json" > "$scratch/evidence/unmanaged.json" || stop
+jq -r '"DNS_UNMANAGED count=\(length) types=\(group_by(.type)|map("\(.[0].type):\(length)")|join(","))"' "$scratch/evidence/unmanaged.json"
 stage=boundary
 bash "$root/scripts/assert-no-destructive-plan.sh" "$scratch/evidence/change.json" > "$scratch/evidence/destructive.log" 2>&1 || stop
 jq -e --slurpfile imports "$scratch/evidence/imports.json" -f "$root/scripts/check-dns-plan.jq" "$scratch/evidence/change.json" >/dev/null 2>&1 || stop
