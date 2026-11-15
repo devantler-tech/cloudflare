@@ -1,8 +1,13 @@
-# Input: the saved plan JSON. $imports[0]: the resolved import list.
+# Input: the saved plan JSON. $imports[0]: the resolved import list. Names are
+# compared in their full, lower-case form, so a relative name cannot slip by.
 # Only DNS records may change. Nothing is deleted or replaced. Every import is
 # known and leaves its record exactly as it is. The typeless apex registry name
 # is refused outright: external-dns would read it as owning the apex mail
 # records and delete them.
+def fqdn: ascii_downcase | rtrimstr(".") |
+  if .=="@" then "devantler.tech"
+  elif .=="devantler.tech" or endswith(".devantler.tech") then .
+  else .+".devantler.tech" end;
 def changed: (.change.before != .change.after) or any(.change.after_unknown|..; .==true);
 . as $plan | $imports[0] as $wanted |
 .errored!=true and
@@ -22,5 +27,5 @@ all(.resource_changes[];
      any($wanted[]; .address==$resource.address) and .change.actions==["no-op"] and (changed|not)
    else true end) and
   (if .type=="cloudflare_dns_record" then
-     ((.change.after // {}).name != "_externaldns.devantler.tech")
+     (((.change.after // {}).name // "")|fqdn) != "_externaldns.devantler.tech"
    else .change.actions==["no-op"] end))
