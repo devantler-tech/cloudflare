@@ -44,11 +44,21 @@ jq -n --arg zone "$zone" '{zone:{id:$zone}, records:[
   {id:"00000000000000000000000000000005",name:"dup.devantler.tech",type:"TXT",content:"\"same\""},
   {id:"00000000000000000000000000000006",name:"portal.devantler.tech",type:"A",content:"192.0.2.1"},
   {id:"00000000000000000000000000000007",name:"_externaldns.a-portal.devantler.tech",type:"TXT",content:"\"heritage=external-dns\""},
-  {id:"00000000000000000000000000000008",name:"_externaldns.a-ghost.devantler.tech",type:"TXT",content:"\"heritage=external-dns\""}
+  {id:"00000000000000000000000000000008",name:"_externaldns.a-ghost.devantler.tech",type:"TXT",content:"\"heritage=external-dns\""},
+  {id:"00000000000000000000000000000009",name:"www.devantler.tech",type:"CNAME",content:"pages.example.test"},
+  {id:"0000000000000000000000000000000a",name:"sig1._domainkey.devantler.tech",type:"CNAME",content:"dkim.example.test"},
+  {id:"0000000000000000000000000000000b",name:"sig2._domainkey.devantler.tech",type:"CNAME",content:"dkim2.example.test"}
 ]}' > "$scratch/snapshot.json"
 create() { jq -n --arg address "$1" --arg name "$2" --arg type "$3" --arg content "$4" \
   '{address:$address,mode:"managed",type:"cloudflare_dns_record",change:{actions:["create"],after:{name:$name,type:$type,content:$content}}}'; }
-resolve() { jq -s '{resource_changes:.}' | jq --slurpfile snapshot "$scratch/snapshot.json" -f "$root/scripts/dns-imports.jq"; }
+# A plan from the real backend always has the zone in its prior state.
+state() { jq -s --argjson ids "$1" '{prior_state:{values:{root_module:{resources:([{type:"cloudflare_zone",values:{id:"z"}}] +
+  [$ids[]|{type:"cloudflare_dns_record",values:{id:.}}])}}},resource_changes:.}'; }
+resolve() { state '[]' | jq --slurpfile snapshot "$scratch/snapshot.json" -f "$root/scripts/dns-imports.jq"; }
+# Without the zone in prior state the managed set is unproven, so resolution stops.
+if create cloudflare_dns_record.mail_mx_01 devantler.tech MX mx01.mail.icloud.com |
+  jq -s '{prior_state:{values:{root_module:{resources:[{type:"cloudflare_dns_record",values:{id:"00000000000000000000000000000002"}}]}}},resource_changes:.}' |
+  jq --slurpfile snapshot "$scratch/snapshot.json" -f "$root/scripts/dns-imports.jq" >/dev/null 2>&1; then exit 1; fi
 result=$( { create cloudflare_dns_record.mail_mx_01 devantler.tech MX mx01.mail.icloud.com
   create cloudflare_dns_record.mail_spf devantler.tech TXT '"v=spf1 include:icloud.com ~all"'
   create cloudflare_dns_record.marker _externaldns.cname-www.devantler.tech TXT '"heritage=external-dns"'; } | resolve)
@@ -67,12 +77,11 @@ result=$( { create cloudflare_dns_record.one devantler.tech MX mx01.mail.icloud.
 jq -e '.refused==[{address:"*",refused:"duplicate-target"}]' <<<"$result" >/dev/null
 # A record already managed here is never adopted a second time, and managed
 # siblings do not block a genuinely new record at the same name and type.
-managed() { jq -s --argjson ids "$1" '{prior_state:{values:{root_module:{resources:[$ids[]|{type:"cloudflare_dns_record",values:{id:.}}]}}},resource_changes:.}'; }
 result=$(create cloudflare_dns_record.mail_mx_03 devantler.tech MX mx01.mail.icloud.com |
-  managed '["00000000000000000000000000000001"]' | jq --slurpfile snapshot "$scratch/snapshot.json" -f "$root/scripts/dns-imports.jq")
+  state '["00000000000000000000000000000001"]' | jq --slurpfile snapshot "$scratch/snapshot.json" -f "$root/scripts/dns-imports.jq")
 jq -e '.imports==[] and .refused==[{address:"cloudflare_dns_record.mail_mx_03",refused:"already-managed"}]' <<<"$result" >/dev/null
 result=$(create cloudflare_dns_record.new_txt devantler.tech TXT '"new-proof"' |
-  managed '["00000000000000000000000000000002","00000000000000000000000000000003"]' | jq --slurpfile snapshot "$scratch/snapshot.json" -f "$root/scripts/dns-imports.jq")
+  state '["00000000000000000000000000000002","00000000000000000000000000000003"]' | jq --slurpfile snapshot "$scratch/snapshot.json" -f "$root/scripts/dns-imports.jq")
 jq -e '.imports==[] and .refused==[]' <<<"$result" >/dev/null
 result=$(create cloudflare_dns_record.lower devantler.tech txt '"apple-domain=x"' | resolve)
 jq -e --arg zone "$zone" '.refused==[] and .imports==[{address:"cloudflare_dns_record.lower",id:($zone+"/00000000000000000000000000000003")}]' <<<"$result" >/dev/null
@@ -84,7 +93,7 @@ import_id="$zone/00000000000000000000000000000001"
 printf '[{"address":"cloudflare_dns_record.mail_mx_01","id":"%s"}]\n' "$import_id" > "$scratch/imports.json"
 record='{"name":"devantler.tech","type":"MX","content":"mx01.mail.icloud.com","ttl":3600}'
 dkim='{"name":"sig1._domainkey.devantler.tech","type":"CNAME","content":"dkim.example.test"}'
-www='{"name":"www.devantler.tech","type":"CNAME","content":"pages.example.test"}'
+www='{"id":"00000000000000000000000000000009","name":"www.devantler.tech","type":"CNAME","content":"pages.example.test"}'
 change() { jq -n --arg address "$1" --arg type "$2" --argjson actions "$3" --argjson before "$4" --argjson after "$5" --argjson importing "$6" \
   '{address:$address,mode:"managed",type:$type,change:({actions:$actions,before:$before,after:$after,after_unknown:{}} + (if $importing then {importing:$importing} else {} end))}'; }
 plan() { jq -s '{resource_changes:.}'; }
@@ -116,6 +125,11 @@ for name in _externaldns.cname-sig1._domainkey.devantler.tech _externaldns.CNAME
 done
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.www cloudflare_dns_record '["no-op"]' "$www" "$www" null
   marker _externaldns.cname-www.devantler.tech; } | reject "marker for a record still managed here"
+# A marker must claim a live record, and only records this plan forgets.
+{ printf '%s\n' "$noop_import"; marker _externaldns.cname-nothing.devantler.tech; } | reject "marker that claims nothing"
+for name in _externaldns.cname-sig2._domainkey.devantler.tech _externaldns.sig2._domainkey.devantler.tech; do
+  { printf '%s\n' "$noop_import"; marker "$name"; } | reject "marker for an unmanaged live record $name"
+done
 # A record external-dns owns is never written here, and every write has a known
 # name (OpenTofu writes an unknown value as null).
 portal='{"name":"portal.devantler.tech","type":"A","content":"192.0.2.2"}'
@@ -123,6 +137,7 @@ portal='{"name":"portal.devantler.tech","type":"A","content":"192.0.2.2"}'
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.portal cloudflare_dns_record '["update"]' "$portal" '{"name":"archive.devantler.tech","type":"A","content":"192.0.2.2"}' null; } | reject rename-away-from-owned
 { printf '%s\n' "$noop_import" "$dkim_kept"; change cloudflare_dns_record.marker cloudflare_dns_record '["create"]' null '{"name":"_externaldns.cname-sig1._domainkey.devantler.tech","type":"txt","content":"x"}' null; } | reject lower-case-marker-type
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.nameless cloudflare_dns_record '["create"]' null '{"type":"TXT","content":"x"}' null; } | reject missing-name
+{ printf '%s\n' "$noop_import"; change cloudflare_dns_record.spaced cloudflare_dns_record '["create"]' null '{"name":" _externaldns.devantler.tech","type":"TXT","content":"x"}' null; } | reject non-hostname-name
 printf '%s\n' "$noop_import" | jq -s '{errored:true,resource_changes:.}' | if check; then exit 1; fi
 printf '%s\n' "$noop_import" | jq -s '{deferred_changes:[{}],resource_changes:.}' | if check; then exit 1; fi
 printf '%s\n' 'PASS: DNS plans admit unchanged imports, creates, updates and forgets only'
