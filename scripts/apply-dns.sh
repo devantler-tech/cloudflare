@@ -218,9 +218,10 @@ new_session || stop
 stage=apply
 apply_rc=0
 # No hard kill mid-apply: a killed apply leaves the R2 lock and unrecorded
-# changes. SIGTERM after 5 minutes lets OpenTofu save state and unlock within
-# the fresh session.
-native provider timeout 300 tofu -chdir="$scratch/work" apply -input=false -lock-timeout=0s -no-color change.tfplan > "$scratch/evidence/apply.log" 2>&1 || apply_rc=$?
+# changes. After 5 minutes OpenTofu alone gets SIGINT, its graceful stop: it
+# waits for in-flight provider calls, saves state and unlocks within the fresh
+# session. --foreground keeps the signal away from the provider plugin.
+native provider timeout --foreground -s INT 300 tofu -chdir="$scratch/work" apply -input=false -lock-timeout=0s -no-color change.tfplan > "$scratch/evidence/apply.log" 2>&1 || apply_rc=$?
 # Capture whatever the apply left behind before judging it. When OpenTofu
 # cannot save to R2 it writes errored.tfstate; keep that in the encrypted
 # evidence first, because the remote copy may then be older than the zone.
