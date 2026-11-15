@@ -74,6 +74,8 @@ jq -e '.imports==[] and .refused==[{address:"cloudflare_dns_record.mail_mx_03",r
 result=$(create cloudflare_dns_record.new_txt devantler.tech TXT '"new-proof"' |
   managed '["00000000000000000000000000000002","00000000000000000000000000000003"]' | jq --slurpfile snapshot "$scratch/snapshot.json" -f "$root/scripts/dns-imports.jq")
 jq -e '.imports==[] and .refused==[]' <<<"$result" >/dev/null
+result=$(create cloudflare_dns_record.lower devantler.tech txt '"apple-domain=x"' | resolve)
+jq -e --arg zone "$zone" '.refused==[] and .imports==[{address:"cloudflare_dns_record.lower",id:($zone+"/00000000000000000000000000000003")}]' <<<"$result" >/dev/null
 printf '%s\n' 'PASS: declared records import only from one exact unowned live record'
 
 # 3. Plan boundary: imports must be unchanged, nothing is deleted or replaced,
@@ -118,6 +120,8 @@ done
 # name (OpenTofu writes an unknown value as null).
 portal='{"name":"portal.devantler.tech","type":"A","content":"192.0.2.2"}'
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.portal cloudflare_dns_record '["update"]' '{"name":"portal.devantler.tech","type":"A","content":"192.0.2.1"}' "$portal" null; } | reject owned-update
+{ printf '%s\n' "$noop_import"; change cloudflare_dns_record.portal cloudflare_dns_record '["update"]' "$portal" '{"name":"archive.devantler.tech","type":"A","content":"192.0.2.2"}' null; } | reject rename-away-from-owned
+{ printf '%s\n' "$noop_import" "$dkim_kept"; change cloudflare_dns_record.marker cloudflare_dns_record '["create"]' null '{"name":"_externaldns.cname-sig1._domainkey.devantler.tech","type":"txt","content":"x"}' null; } | reject lower-case-marker-type
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.nameless cloudflare_dns_record '["create"]' null '{"type":"TXT","content":"x"}' null; } | reject missing-name
 printf '%s\n' "$noop_import" | jq -s '{errored:true,resource_changes:.}' | if check; then exit 1; fi
 printf '%s\n' "$noop_import" | jq -s '{deferred_changes:[{}],resource_changes:.}' | if check; then exit 1; fi
