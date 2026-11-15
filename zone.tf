@@ -1,6 +1,7 @@
 # Zone features that rewrite the HTML of proxied pages, or override a site's own
-# crawler policy, stay off, so visitors get exactly the bytes the origin serves. The business site forbids injected
-# scripts, and a strict Content-Security-Policy would block them anyway.
+# crawler policy, stay off, so visitors get exactly the bytes the origin serves.
+# The business site forbids injected scripts, and a strict
+# Content-Security-Policy would block them anyway.
 #
 # - Email Address Obfuscation replaces mailto links with a JavaScript decoder,
 #   which hides the published contact address from visitors without JS.
