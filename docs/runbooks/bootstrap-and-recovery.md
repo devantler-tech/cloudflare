@@ -357,34 +357,41 @@ session derived from the existing `CLOUDFLARE_API_TOKEN`; the configuration
 comes from `CLOUDFLARE_BOOTSTRAP_CONFIGURATION`. The live state must still be
 exactly the retained `recovery/backend-source/` generation, so an earlier apply
 that was not yet retained refuses every new run. A declared record that the
-plan would create is imported when exactly one live record has the same name,
-type and content. It stays a real create only when no live record has that
-name and type. A changed content, more than one match, or a record that
-external-dns owns refuses the run.
+plan would create is imported when exactly one live record that nothing here
+manages yet has the same name, type and content. It stays a real create only
+when no such record has that name and type. A changed content, more than one
+match, a record already managed here, or a record that external-dns owns
+refuses the run.
 
 The saved plan must then pass `scripts/assert-no-destructive-plan.sh` and
 `scripts/check-dns-plan.jq`. Only DNS records may change. Imports must leave
 their record exactly as it is. Creates, updates and `removed` blocks with
-`destroy = false` are admitted; deletes and replacements are not. The public
-log shows only `DNS_PLAN` lines, with addresses, actions and changed attribute
-names; `DNS_DRIFT` lines; and one `DNS_UNMANAGED` count, by type, of live
-records that nothing owns. Their names, values, identifiers and tool output
-stay in the encrypted
-evidence.
+`destroy = false` are admitted; deletes and replacements are not. A created or
+updated record must have a known name and must not be owned by external-dns.
+An `_externaldns.` ownership record may only claim a record that the same plan
+stops managing, so it can never hand a mail record to external-dns. The public
+log shows `DNS_PLAN` and `DNS_DRIFT` lines, with the `dns.tf` addresses,
+actions and changed attribute names, plus counts for anything keyed by the
+private configuration and one `DNS_UNMANAGED` count, by type, of live records
+that nothing owns. Names, values, identifiers and tool output stay in the
+encrypted evidence.
 
 In apply mode the run encrypts the state before and after the apply, even
-when the apply fails, and then requires a clean plan. After a successful apply, a second job initializes
-from R2 on a fresh runner and must also find nothing to change. Afterwards,
+when the apply fails, and then requires a clean plan. The script never force-kills
+the apply, because a killed apply would leave the R2 lock and unrecorded
+changes behind. After a successful apply, a second job initializes from R2 on
+a fresh runner and must also find nothing to change. Afterwards,
 download the `encrypted-dns-change` and `encrypted-dns-recovery` artifacts,
 authenticate the `after` and `recovered` packages with the independent
 identity (`check-state-recovery-package.sh --identity-file`), and retain the
-`after` package in `recovery/backend-source/` through a signed, data-only pull
-request. The configuration does not change, so the configuration secret stays
+`after` package in `recovery/backend-source/` through a signed pull request:
+a data-only one, or the next DNS change. The configuration does not change, so the configuration secret stays
 as it is. The next DNS change is possible only after that pull request merges.
 
 To hand a record to external-dns without a gap, create its ownership TXT
-record in one change, then replace the record's resource with a `removed`
-block that keeps the record (`lifecycle { destroy = false }`). To undo an
+record and replace the record's resource with a `removed` block that keeps the
+record (`lifecycle { destroy = false }`), in the same change. Forget the
+ownership record in the next change, because external-dns then owns it. To undo an
 apply, revert its pull request and run the same two dispatches; a revert that
 would delete a record is refused, so restore deleted values by declaring them
 again.
