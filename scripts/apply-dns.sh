@@ -75,9 +75,14 @@ request() {
 request GET "https://api.cloudflare.com/client/v4/accounts/$account/tokens/verify" "$scratch/parent.json" || stop
 parent=$(jq -er 'if .result.status=="active" and (.result.id|type=="string" and test("^[a-f0-9]{32}$")) then .result.id else error("invalid parent") end' "$scratch/parent.json" 2>/dev/null) || stop
 jq -n --arg parent "$parent" '{parentAccessKeyId:$parent,bucket:"cloudflare-bootstrap-state",permission:"object-read-write",ttlSeconds:900,prefixes:["cloudflare/"]}' > "$scratch/request.json"
+# A 15-minute state session. The apply gets a fresh one, so its state save and
+# unlock never run on expiring credentials.
+new_session() {
+  request POST "https://api.cloudflare.com/client/v4/accounts/$account/r2/temp-access-credentials" "$scratch/session.json" "$scratch/request.json" &&
+    backend_session "$scratch/session.json"
+}
 stage=session
-request POST "https://api.cloudflare.com/client/v4/accounts/$account/r2/temp-access-credentials" "$scratch/session.json" "$scratch/request.json" || stop
-backend_session "$scratch/session.json" || stop
+new_session || stop
 unset parent
 # OpenTofu gets only the short-lived state session, plus the account token for
 # provider steps. Nothing else from the runner environment reaches it.
@@ -208,11 +213,14 @@ jq -e --slurpfile imports "$scratch/evidence/imports.json" --slurpfile snapshot 
 if [[ $DNS_MODE == plan ]]; then unset root_token; exit 0; fi
 stage=before-capture
 capture before || stop
+stage=session-refresh
+new_session || stop
 stage=apply
 apply_rc=0
 # No hard kill mid-apply: a killed apply leaves the R2 lock and unrecorded
-# changes. The job timeout is the outer bound.
-native provider timeout 600 tofu -chdir="$scratch/work" apply -input=false -lock-timeout=0s -no-color change.tfplan > "$scratch/evidence/apply.log" 2>&1 || apply_rc=$?
+# changes. SIGTERM after 5 minutes lets OpenTofu save state and unlock within
+# the fresh session.
+native provider timeout 300 tofu -chdir="$scratch/work" apply -input=false -lock-timeout=0s -no-color change.tfplan > "$scratch/evidence/apply.log" 2>&1 || apply_rc=$?
 # Capture whatever the apply left behind before judging it. When OpenTofu
 # cannot save to R2 it writes errored.tfstate; keep that in the encrypted
 # evidence first, because the remote copy may then be older than the zone.

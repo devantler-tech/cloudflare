@@ -14,8 +14,11 @@ def owned($records):
   (.name|fqdn) as $name | (.type|ascii_downcase) as $type |
   any($records[]; (.name|fqdn) as $marker |
     .type=="TXT" and ($marker=="_externaldns."+$name or $marker=="_externaldns."+$type+"-"+$name));
+# The zone is always in state; without it the managed set below would be empty.
+if ([.prior_state.values.root_module.resources[]? | select(.type=="cloudflare_zone")]|length)!=1
+then error("dns-imports: prior state without the zone") else . end |
 $snapshot[0] as $live |
-[.prior_state.values.root_module.resources[]? | select(.type=="cloudflare_dns_record") | .values.id] as $managed |
+[.prior_state.values.root_module.resources[] | select(.type=="cloudflare_dns_record") | .values.id] as $managed |
 [.resource_changes[] |
   select(.mode=="managed" and .type=="cloudflare_dns_record" and .change.actions==["create"]) |
   .change.after as $after |
