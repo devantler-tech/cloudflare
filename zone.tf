@@ -13,8 +13,9 @@
 #   the site's robots.txt allows every crawler, keeping the business site out of
 #   AI search. Each site states its crawler policy in its own robots.txt.
 #
-# Every other bot setting keeps its live value, because the provider treats
-# unset attributes as computed.
+# Every other bot setting keeps its live value. Most unset attributes are
+# computed; the two the provider would otherwise reset (a static default and an
+# optional, non-computed flag) are ignored so this resource never changes them.
 resource "cloudflare_zone_setting" "email_obfuscation" {
   zone_id    = cloudflare_zone.primary.id
   setting_id = "email_obfuscation"
@@ -27,4 +28,8 @@ resource "cloudflare_bot_management" "primary" {
   enable_js          = false
   crawler_protection = "disabled"
   ai_bots_protection = "disabled"
+
+  lifecycle {
+    ignore_changes = [ai_bots_migration_opt_out, bot_preference_sync_enabled]
+  }
 }
