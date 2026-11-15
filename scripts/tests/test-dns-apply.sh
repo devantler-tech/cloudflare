@@ -125,6 +125,10 @@ for name in _externaldns.cname-sig1._domainkey.devantler.tech _externaldns.CNAME
 done
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.www cloudflare_dns_record '["no-op"]' "$www" "$www" null
   marker _externaldns.cname-www.devantler.tech; } | reject "marker for a record still managed here"
+{ printf '%s\n' "$noop_import"; marker _externaldns.cname-www.devantler.tech
+  change cloudflare_dns_record.www cloudflare_dns_record '["forget"]' '{"name":"www.devantler.tech","type":"CNAME"}' null null; } | reject "forget without the record id"
+{ printf '%s\n' "$noop_import"; marker _externaldns.cname-www.devantler.tech
+  change cloudflare_dns_record.www cloudflare_dns_record '["forget"]' '{"id":"0000000000000000000000000000000b","name":"www.devantler.tech","type":"CNAME"}' null null; } | reject "forget of a different record"
 # A marker must claim a live record, and only records this plan forgets.
 { printf '%s\n' "$noop_import"; marker _externaldns.cname-nothing.devantler.tech; } | reject "marker that claims nothing"
 for name in _externaldns.cname-sig2._domainkey.devantler.tech _externaldns.sig2._domainkey.devantler.tech; do
@@ -138,6 +142,7 @@ portal='{"name":"portal.devantler.tech","type":"A","content":"192.0.2.2"}'
 { printf '%s\n' "$noop_import" "$dkim_kept"; change cloudflare_dns_record.marker cloudflare_dns_record '["create"]' null '{"name":"_externaldns.cname-sig1._domainkey.devantler.tech","type":"txt","content":"x"}' null; } | reject lower-case-marker-type
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.nameless cloudflare_dns_record '["create"]' null '{"type":"TXT","content":"x"}' null; } | reject missing-name
 { printf '%s\n' "$noop_import"; change cloudflare_dns_record.spaced cloudflare_dns_record '["create"]' null '{"name":" _externaldns.devantler.tech","type":"TXT","content":"x"}' null; } | reject non-hostname-name
+{ printf '%s\n' "$noop_import"; change cloudflare_dns_record.newline cloudflare_dns_record '["create"]' null '{"name":"portal.devantler.tech\n","type":"A","content":"192.0.2.3"}' null; } | reject trailing-newline-name
 printf '%s\n' "$noop_import" | jq -s '{errored:true,resource_changes:.}' | if check; then exit 1; fi
 printf '%s\n' "$noop_import" | jq -s '{deferred_changes:[{}],resource_changes:.}' | if check; then exit 1; fi
 printf '%s\n' 'PASS: DNS plans admit unchanged imports, creates, updates and forgets only'
