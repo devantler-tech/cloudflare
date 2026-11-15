@@ -93,7 +93,7 @@ jobs:
   recover:
     name: Recover from R2 on a fresh runner and require no changes
     needs: change
-    if: ${{ always() && !cancelled() && inputs.mode == 'apply' && needs.change.result != 'skipped' }}
+    if: ${{ inputs.mode == 'apply' && needs.change.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

@@ -372,7 +372,7 @@ nothing owns. Values, identifiers and tool output stay in the encrypted
 evidence.
 
 In apply mode the run encrypts the state before and after the apply, even
-when the apply fails, and then requires a clean plan. A second job initializes
+when the apply fails, and then requires a clean plan. After a successful apply, a second job initializes
 from R2 on a fresh runner and must also find nothing to change. Afterwards,
 download the `encrypted-dns-change` and `encrypted-dns-recovery` artifacts,
 authenticate the `after` and `recovered` packages with the independent

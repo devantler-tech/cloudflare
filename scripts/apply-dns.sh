@@ -101,8 +101,7 @@ plan_json() {
   tf local show -json "$name.tfplan" > "$scratch/evidence/$name.json" 2> "$scratch/evidence/$name-show.log" || return 1
   state_unique_json "$scratch/evidence/$name.json"
 }
-# Bind the live state to the retained recovery generation: an apply that was
-# not yet retained, or a different lineage, refuses every further change.
+# Encrypt the current state with the unchanged configuration as one package.
 capture() {
   local name=$1
   tf local state pull > "$scratch/evidence/$name-state.json" 2> "$scratch/evidence/$name-pull.log" || return 1
@@ -136,6 +135,8 @@ jq -e '.terraform_version=="1.12.6"' "$scratch/evidence/version.json" >/dev/null
 stage=initialize
 tf local init -input=false -lockfile=readonly -no-color -backend-config="$scratch/backend.hcl" > "$scratch/evidence/init.log" 2>&1 || stop
 stage=recovery-generation
+# Bind the live state to the retained recovery generation: an apply that was
+# not yet retained, or a different lineage, refuses every further change.
 tf local state pull > "$scratch/evidence/start-state.json" 2> "$scratch/evidence/start-pull.log" || stop
 state_unique_json "$scratch/evidence/start-state.json" || stop
 if [[ $DNS_PHASE == change ]]; then
