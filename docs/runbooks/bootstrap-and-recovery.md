@@ -368,8 +368,9 @@ The saved plan must then pass `scripts/assert-no-destructive-plan.sh` and
 their record exactly as it is. Creates, updates and `removed` blocks with
 `destroy = false` are admitted; deletes and replacements are not. A created or
 updated record must have a known name and must not be owned by external-dns.
-An `_externaldns.` ownership record may only claim a record that the same plan
-stops managing, so it can never hand a mail record to external-dns. The public
+An `_externaldns.` ownership record must claim at least one live record, and
+only records the same plan stops managing, so it can never hand a mail record,
+or any record nothing here manages, to external-dns. The public
 log shows `DNS_PLAN` and `DNS_DRIFT` lines, with the `dns.tf` addresses,
 actions and changed attribute names, plus counts for anything keyed by the
 private configuration and one `DNS_UNMANAGED` count, by type, of live records
@@ -387,6 +388,13 @@ identity (`check-state-recovery-package.sh --identity-file`), and retain the
 `after` package in `recovery/backend-source/` through a signed pull request:
 a data-only one, or the next DNS change. The configuration does not change, so the configuration secret stays
 as it is. The next DNS change is possible only after that pull request merges.
+
+If an apply fails or stops part-way, do not dispatch again. The state has
+moved on, so every new run is refused until it is retained. Authenticate the
+`after` package from `encrypted-dns-change`, and the `errored.tfstate` in its
+evidence if OpenTofu could not save to R2. Compare the state with the live zone
+and retain the package that matches what Cloudflare actually holds. Then
+dispatch a plan to see what is still pending.
 
 To hand a record to external-dns without a gap, create its ownership TXT
 record and replace the record's resource with a `removed` block that keeps the
