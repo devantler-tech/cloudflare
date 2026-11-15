@@ -1,19 +1,36 @@
-# Input: the saved plan JSON. $imports[0]: the resolved import list. Names are
-# compared in their full, lower-case form, so a relative name cannot slip by.
+# Input: the saved plan JSON. $imports[0]: the resolved import list.
+# $snapshot[0]: the live zone. Names are compared in their full, lower-case
+# form, so a relative or differently written name cannot slip by.
 # Only DNS records may change. Nothing is deleted or replaced. Every import is
-# known and leaves its record exactly as it is. The typeless apex registry name
-# is refused outright: external-dns would read it as owning the apex mail
-# records and delete them.
+# known and leaves its record exactly as it is. A created or updated record
+# has a known name, and external-dns does not own it. An external-dns
+# ownership record may only claim a record this plan stops managing: one that
+# claims a record still managed here, such as a mail record, would let
+# external-dns delete it. The typeless apex registry name is always refused,
+# because it claims every apex record, the Email MX and TXT records included.
 def fqdn: ascii_downcase | rtrimstr(".") |
   if .=="@" then "devantler.tech"
   elif .=="devantler.tech" or endswith(".devantler.tech") then .
   else .+".devantler.tech" end;
 def changed: (.change.before != .change.after) or any(.change.after_unknown|..; .==true);
-. as $plan | $imports[0] as $wanted |
+def owned($records):
+  (.name|fqdn) as $name | (.type|ascii_downcase) as $type |
+  any($records[]; (.name|fqdn) as $marker |
+    .type=="TXT" and ($marker=="_externaldns."+$name or $marker=="_externaldns."+$type+"-"+$name));
+# Every (name, type) an ownership record could claim, read both typed and typeless.
+def claims:
+  (.name|fqdn|ltrimstr("_externaldns.")) as $rest |
+  [{name:$rest, type:null}] +
+  [$rest|capture("^(?<type>[a-z0-9]+)-(?<name>.+)$")|{name, type}];
+def writes: .change.actions==["create"] or .change.actions==["update"];
+. as $plan | $imports[0] as $wanted | $snapshot[0].records as $live |
+[.resource_changes[] | select(.type=="cloudflare_dns_record" and .change.actions!=["forget"]) |
+  .change.after // .change.before | select(type=="object") |
+  {name:(.name // "" | fqdn), type:(.type // "" | ascii_downcase)}] as $kept |
 .errored!=true and
 ((.deferred_changes // [])|length)==0 and
 (.resource_changes|type=="array") and
-($wanted|type=="array") and
+($wanted|type=="array") and ($live|type=="array") and
 (($wanted|map(.address)|length)==($wanted|map(.address)|unique|length)) and
 all($wanted[];
   . as $import |
@@ -26,6 +43,13 @@ all(.resource_changes[];
   (if .change.importing then
      any($wanted[]; .address==$resource.address) and .change.actions==["no-op"] and (changed|not)
    else true end) and
-  (if .type=="cloudflare_dns_record" then
-     (((.change.after // {}).name // "")|fqdn) != "_externaldns.devantler.tech"
-   else .change.actions==["no-op"] end))
+  (if .type!="cloudflare_dns_record" then .change.actions==["no-op"]
+   elif writes then
+     .change.after as $after |
+     ($after.name|type=="string") and ($after.type|type=="string") and
+     ($after.name|fqdn) != "_externaldns.devantler.tech" and
+     (if ($after.type=="TXT" and ($after.name|fqdn|startswith("_externaldns."))) then
+        all($after|claims[]; . as $claim |
+          all($kept[]; .name!=$claim.name or ($claim.type!=null and .type!=$claim.type)))
+      else ($after|owned($live)|not) end)
+   else true end))

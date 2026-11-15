@@ -173,16 +173,21 @@ jq '.imports' "$scratch/evidence/resolved.json" > "$scratch/evidence/imports.jso
 jq -r '.[]|"import {\n  to = \(.address)\n  id = \(.id|tojson)\n}\n"' "$scratch/evidence/imports.json" > "$scratch/work/imports.tf"
 stage=plan
 plan_json change || stop
-# Public summary: addresses, actions and changed attribute names, never values.
-jq -r '.resource_changes[] |
+# Public summary: actions and changed attribute names, never values. Only the
+# addresses written in dns.tf are printed; resources keyed by the private
+# configuration (tokens, buckets, configured records) appear only as a count.
+jq -r 'def public: .address|startswith("cloudflare_dns_record.") and (startswith("cloudflare_dns_record.records[")|not);
+  (.resource_changes[] | select(public) |
   (if .change.importing then "import" else (.change.actions|join("-")) end) as $action |
   select($action!="no-op") |
   ([(.change.before // {}), (.change.after // {})] as [$b,$a] |
     ([$b,$a]|map(keys)|add|unique) | map(select($b[.]!=$a[.]))) as $attributes |
   "DNS_PLAN address=\(.address) action=\($action)" +
-  (if $action=="update" or ($action=="import" and .change.actions!=["no-op"]) then " attributes=\($attributes|join(","))" else "" end)
+  (if $action=="update" or ($action=="import" and .change.actions!=["no-op"]) then " attributes=\($attributes|join(","))" else "" end)),
+  "DNS_PLAN_PRIVATE changes=\([.resource_changes[] | select(public|not) | select(.change.actions!=["no-op"])]|length)",
+  (.resource_drift[]? | select(public) | "DNS_DRIFT address=\(.address) action=\(.change.actions|join("-"))"),
+  "DNS_DRIFT_PRIVATE changes=\([.resource_drift[]? | select(public|not)]|length)"
 ' "$scratch/evidence/change.json"
-jq -r '.resource_drift[]? | "DNS_DRIFT address=\(.address) action=\(.change.actions|join("-"))"' "$scratch/evidence/change.json"
 # Live records that nothing owns: not declared here, not external-dns, not a
 # challenge. Their names stay in the encrypted evidence; the log gets counts.
 jq --slurpfile plan "$scratch/evidence/change.json" --slurpfile imports "$scratch/evidence/imports.json" '
@@ -198,13 +203,15 @@ jq --slurpfile plan "$scratch/evidence/change.json" --slurpfile imports "$scratc
 jq -r '"DNS_UNMANAGED count=\(length) types=\(group_by(.type)|map("\(.[0].type):\(length)")|join(","))"' "$scratch/evidence/unmanaged.json"
 stage=boundary
 bash "$root/scripts/assert-no-destructive-plan.sh" "$scratch/evidence/change.json" > "$scratch/evidence/destructive.log" 2>&1 || stop
-jq -e --slurpfile imports "$scratch/evidence/imports.json" -f "$root/scripts/check-dns-plan.jq" "$scratch/evidence/change.json" >/dev/null 2>&1 || stop
+jq -e --slurpfile imports "$scratch/evidence/imports.json" --slurpfile snapshot "$scratch/evidence/snapshot.json" -f "$root/scripts/check-dns-plan.jq" "$scratch/evidence/change.json" >/dev/null 2>&1 || stop
 if [[ $DNS_MODE == plan ]]; then unset root_token; exit 0; fi
 stage=before-capture
 capture before || stop
 stage=apply
 apply_rc=0
-tf provider apply -input=false -lock-timeout=0s -no-color change.tfplan > "$scratch/evidence/apply.log" 2>&1 || apply_rc=$?
+# No hard kill mid-apply: a killed apply leaves the R2 lock and unrecorded
+# changes. The job timeout is the outer bound.
+native provider timeout 600 tofu -chdir="$scratch/work" apply -input=false -lock-timeout=0s -no-color change.tfplan > "$scratch/evidence/apply.log" 2>&1 || apply_rc=$?
 # Capture whatever the apply left behind before judging it. When OpenTofu
 # cannot save to R2 it writes errored.tfstate; keep that in the encrypted
 # evidence first, because the remote copy may then be older than the zone.
