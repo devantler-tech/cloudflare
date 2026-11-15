@@ -51,7 +51,7 @@ all(.resource_changes[];
    elif writes then
      .change.after as $after |
      ($after.name|type=="string") and ($after.type|type=="string") and
-     ($after.name|test("^[A-Za-z0-9_.*@-]+$")) and
+     ($after.name|test("\\A[A-Za-z0-9_.*@-]+\\z")) and
      $after.type==($after.type|ascii_upcase) and
      ($after.name|fqdn) != "_externaldns.devantler.tech" and
      (if .change.actions==["update"] then (.change.before|owned($live)|not) else true end) and
