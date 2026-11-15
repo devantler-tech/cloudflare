@@ -10,7 +10,7 @@
 # create of one of them is always an import of the live setting: the bot
 # management configuration by zone, and an allowed zone setting by zone and
 # setting name. Any other setting is left to fail at the plan check.
-def zone_settings: ["email_obfuscation"];
+def zone_settings: ["email_obfuscation", "nel"];
 def fqdn: ascii_downcase | rtrimstr(".") |
   if .=="@" then "devantler.tech"
   elif .=="devantler.tech" or endswith(".devantler.tech") then .

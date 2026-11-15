@@ -16,7 +16,7 @@
 # the bot management configuration and the zone settings listed below. They
 # always exist, so they are imported, never created, and may be updated by the
 # reviewed change that imports them.
-def zone_settings: ["email_obfuscation"];
+def zone_settings: ["email_obfuscation", "nel"];
 def setting: .type=="cloudflare_bot_management" or
   (.type=="cloudflare_zone_setting" and (((.change.after // .change.before // {}).setting_id // "")|IN(zone_settings[])));
 def fqdn: ascii_downcase | rtrimstr(".") |
