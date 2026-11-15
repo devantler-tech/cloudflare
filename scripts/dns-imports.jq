@@ -10,9 +10,9 @@ def fqdn: ascii_downcase | rtrimstr(".") |
   else .+".devantler.tech" end;
 def registry: .type=="TXT" and (.name|fqdn|startswith("_externaldns."));
 def owned($records):
-  (.name|fqdn) as $name | (.type|ascii_downcase) as $type | any($records[];
-    .type=="TXT" and (.name|fqdn) as $marker |
-    ($marker=="_externaldns."+$name or $marker=="_externaldns."+$type+"-"+$name));
+  (.name|fqdn) as $name | (.type|ascii_downcase) as $type |
+  any($records[]; (.name|fqdn) as $marker |
+    .type=="TXT" and ($marker=="_externaldns."+$name or $marker=="_externaldns."+$type+"-"+$name));
 $snapshot[0] as $live |
 [.resource_changes[] |
   select(.mode=="managed" and .type=="cloudflare_dns_record" and .change.actions==["create"]) |
