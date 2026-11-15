@@ -9,9 +9,11 @@
 #   the Free plan it cannot be turned off separately. It can also challenge the
 #   platform's API and sign-in traffic, which sign-in protects instead.
 # - AI Labyrinth (`crawler_protection`) adds hidden honeypot links to pages.
-# - "Block AI bots" (`ai_bots_protection`) answered AI crawlers with 403 although
-#   the site's robots.txt allows every crawler, keeping the business site out of
-#   AI search. Each site states its crawler policy in its own robots.txt.
+# - The AI training crawler policy (`ai_training = "disallow"`) answered GPTBot,
+#   ClaudeBot and PerplexityBot with 403 at the edge, although the site's
+#   robots.txt allows every crawler. "Block AI bots" (`ai_bots_protection`) was
+#   already off and stays off. Each site states its crawler policy in its own
+#   robots.txt instead.
 #
 # Every other bot setting keeps its live value. Most unset attributes are
 # computed; the two the provider would otherwise reset (a static default and an
@@ -28,6 +30,7 @@ resource "cloudflare_bot_management" "primary" {
   enable_js          = false
   crawler_protection = "disabled"
   ai_bots_protection = "disabled"
+  ai_training        = "disabled"
 
   lifecycle {
     ignore_changes = [ai_bots_migration_opt_out, bot_preference_sync_enabled]
