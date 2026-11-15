@@ -208,8 +208,13 @@ jq --slurpfile plan "$scratch/evidence/change.json" --slurpfile imports "$scratc
 ' "$scratch/evidence/snapshot.json" > "$scratch/evidence/unmanaged.json" || stop
 jq -r '"DNS_UNMANAGED count=\(length) types=\(group_by(.type)|map("\(.[0].type):\(length)")|join(","))"' "$scratch/evidence/unmanaged.json"
 stage=boundary
+# The reviewed list of live records nothing here manages that a new
+# external-dns ownership record may claim (see check-dns-plan.jq).
+handover="$root/.github/dns-handover.json"
+[[ -f $handover && ! -L $handover && $(wc -c < "$handover") -le 65536 ]] || stop
+state_unique_json "$handover" || stop
 bash "$root/scripts/assert-no-destructive-plan.sh" "$scratch/evidence/change.json" > "$scratch/evidence/destructive.log" 2>&1 || stop
-jq -e --slurpfile imports "$scratch/evidence/imports.json" --slurpfile snapshot "$scratch/evidence/snapshot.json" -f "$root/scripts/check-dns-plan.jq" "$scratch/evidence/change.json" >/dev/null 2>&1 || stop
+jq -e --slurpfile imports "$scratch/evidence/imports.json" --slurpfile snapshot "$scratch/evidence/snapshot.json" --slurpfile handover "$handover" -f "$root/scripts/check-dns-plan.jq" "$scratch/evidence/change.json" >/dev/null 2>&1 || stop
 if [[ $DNS_MODE == plan ]]; then unset root_token; exit 0; fi
 stage=before-capture
 capture before || stop

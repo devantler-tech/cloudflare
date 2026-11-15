@@ -22,18 +22,38 @@ resource "cloudflare_dns_record" "apex" {
   settings = { flatten_cname = false }
 }
 
-# www moves to the platform: external-dns serves it from the business site's
-# public route. This ownership record lets external-dns take over the existing
-# CNAME and replace it with the gateway addresses in one batch, so www always
-# resolves. The CNAME itself stays in Cloudflare; this repository only forgets it.
-resource "cloudflare_dns_record" "www_external_dns_owner" {
+# external-dns serves www from the business site's public route. It took over
+# the old www CNAME through a one-time ownership record (forgotten below) and
+# replaced it with the gateway addresses. Its own ownership records for those
+# addresses then disappeared, so these two restore them with external-dns's
+# exact content. external-dns re-owns the existing www records without
+# changing them. .github/dns-handover.json lists the two records they claim.
+resource "cloudflare_dns_record" "www_external_dns_owner_a" {
   zone_id  = cloudflare_zone.primary.id
-  name     = "_externaldns.cname-www.devantler.tech"
+  name     = "_externaldns.a-www.devantler.tech"
   type     = "TXT"
   content  = "\"heritage=external-dns,external-dns/owner=platform.devantler.tech,external-dns/resource=httproute/business-site/business-site-public\""
   ttl      = 1
   proxied  = false
   settings = {}
+}
+
+resource "cloudflare_dns_record" "www_external_dns_owner_aaaa" {
+  zone_id  = cloudflare_zone.primary.id
+  name     = "_externaldns.aaaa-www.devantler.tech"
+  type     = "TXT"
+  content  = "\"heritage=external-dns,external-dns/owner=platform.devantler.tech,external-dns/resource=httproute/business-site/business-site-public\""
+  ttl      = 1
+  proxied  = false
+  settings = {}
+}
+
+removed {
+  from = cloudflare_dns_record.www_external_dns_owner
+
+  lifecycle {
+    destroy = false
+  }
 }
 
 removed {
