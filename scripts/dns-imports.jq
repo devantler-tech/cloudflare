@@ -9,7 +9,7 @@ def fqdn: ascii_downcase | rtrimstr(".") |
   if .=="@" then "devantler.tech"
   elif .=="devantler.tech" or endswith(".devantler.tech") then .
   else .+".devantler.tech" end;
-def registry: .type=="TXT" and (.name|fqdn|startswith("_externaldns."));
+def registry: (.type|ascii_upcase)=="TXT" and (.name|fqdn|startswith("_externaldns."));
 def owned($records):
   (.name|fqdn) as $name | (.type|ascii_downcase) as $type |
   any($records[]; (.name|fqdn) as $marker |
@@ -19,7 +19,7 @@ $snapshot[0] as $live |
 [.resource_changes[] |
   select(.mode=="managed" and .type=="cloudflare_dns_record" and .change.actions==["create"]) |
   .change.after as $after |
-  [$live.records[] | select((.name|fqdn)==($after.name|fqdn) and .type==$after.type)] as $named |
+  [$live.records[] | select((.name|fqdn)==($after.name|fqdn) and (.type|ascii_upcase)==($after.type|ascii_upcase))] as $named |
   [$named[] | select(.id|IN($managed[])|not)] as $same |
   [$same[] | select(.content==$after.content)] as $exact |
   if ($after|registry|not) and ($after|owned($live.records)) then {address, refused:"external-dns-owned"}
