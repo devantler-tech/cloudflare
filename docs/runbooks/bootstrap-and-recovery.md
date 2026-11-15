@@ -364,7 +364,10 @@ match, a record already managed here, or a record that external-dns owns
 refuses the run.
 
 The saved plan must then pass `scripts/assert-no-destructive-plan.sh` and
-`scripts/check-dns-plan.jq`. Only DNS records may change. Imports must leave
+`scripts/check-dns-plan.jq`. Only DNS records and the zone settings in `zone.tf`
+may change. Those settings, the bot management configuration and the listed
+zone settings, always exist, so they are imported by zone, never created or
+forgotten, and may be updated by the change that imports them. Imports must leave
 their record exactly as it is. Creates, updates and `removed` blocks with
 `destroy = false` are admitted; deletes and replacements are not. A created or
 updated record must have a known name and must not be owned by external-dns.

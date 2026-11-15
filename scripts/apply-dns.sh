@@ -180,9 +180,10 @@ jq -r '.[]|"import {\n  to = \(.address)\n  id = \(.id|tojson)\n}\n"' "$scratch/
 stage=plan
 plan_json change || stop
 # Public summary: actions and changed attribute names, never values. Only the
-# addresses written in dns.tf are printed; resources keyed by the private
+# addresses written in dns.tf and zone.tf are printed; resources keyed by the private
 # configuration (tokens, buckets, configured records) appear only as a count.
-jq -r 'def public: .address|startswith("cloudflare_dns_record.") and (startswith("cloudflare_dns_record.records[")|not);
+jq -r 'def public: .address | (startswith("cloudflare_dns_record.") and (startswith("cloudflare_dns_record.records[")|not)) or
+    startswith("cloudflare_zone_setting.") or startswith("cloudflare_bot_management.");
   (.resource_changes[] | select(public) |
   (if .change.importing then "import" else (.change.actions|join("-")) end) as $action |
   select($action!="no-op") |

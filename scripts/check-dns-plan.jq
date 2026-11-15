@@ -11,6 +11,14 @@
 # names. Otherwise it could hand a mail record, or any other record, to
 # external-dns, which would delete it. The typeless apex registry name is always refused,
 # because it claims every apex record, the Email MX and TXT records included.
+#
+# Besides DNS records, only the zone settings declared in zone.tf may change:
+# the bot management configuration and the zone settings listed below. They
+# always exist, so they are imported, never created, and may be updated by the
+# reviewed change that imports them.
+def zone_settings: ["email_obfuscation"];
+def setting: .type=="cloudflare_bot_management" or
+  (.type=="cloudflare_zone_setting" and (((.change.after // .change.before // {}).setting_id // "")|IN(zone_settings[])));
 def fqdn: ascii_downcase | rtrimstr(".") |
   if .=="@" then "devantler.tech"
   elif .=="devantler.tech" or endswith(".devantler.tech") then .
@@ -51,9 +59,11 @@ all(.resource_changes[];
   .mode=="managed" and
   (.change.actions|IN(["no-op"],["create"],["update"],["forget"])) and
   (if .change.importing then
-     any($wanted[]; .address==$resource.address) and .change.actions==["no-op"] and (changed|not)
+     any($wanted[]; .address==$resource.address) and
+     (if setting then .change.actions|IN(["no-op"],["update"]) else .change.actions==["no-op"] and (changed|not) end)
    else true end) and
-  (if .type!="cloudflare_dns_record" then .change.actions==["no-op"]
+  (if setting then .change.actions|IN(["no-op"],["update"])
+   elif .type!="cloudflare_dns_record" then .change.actions==["no-op"]
    elif writes then
      .change.after as $after |
      ($after.name|type=="string") and ($after.type|type=="string") and
