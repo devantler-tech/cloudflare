@@ -1,0 +1,15 @@
+{
+  "format_version": "1.2",
+  "resource_changes": [
+    {
+      "address": "cloudflare_zone.primary",
+      "mode": "managed",
+      "type": "cloudflare_zone",
+      "change": {
+        "actions": ["delete"],
+        "before": { "name": "devantler.tech" },
+        "after": null
+      }
+    }
+  ]
+}

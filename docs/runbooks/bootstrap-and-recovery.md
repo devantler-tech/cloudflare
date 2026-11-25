@@ -369,7 +369,8 @@ may change. Those settings, the bot management configuration and the listed
 zone settings, always exist, so they are imported by zone, never created or
 forgotten, and may be updated by the change that imports them. Imports must leave
 their record exactly as it is. Creates, updates and `removed` blocks with
-`destroy = false` are admitted; deletes and replacements are not. A created or
+`destroy = false` are admitted; replacements are not. A delete is admitted only
+as a reviewed retirement of a DNS record, described below. A created or
 updated record must have a known name and must not be owned by external-dns.
 An `_externaldns.` ownership record must claim at least one live record. Each
 record it claims must be one the same plan stops managing, or one nothing here
@@ -406,8 +407,35 @@ record and replace the record's resource with a `removed` block that keeps the
 record (`lifecycle { destroy = false }`), in the same change. Forget the
 ownership record in the next change, because external-dns then owns it. To undo an
 apply, revert its pull request and run the same two dispatches; a revert that
-would delete a record is refused, so restore deleted values by declaring them
-again.
+would delete a record is refused unless that record gets a retirement entry, as
+below. Restore deleted values by declaring them again.
+
+To delete a record this repository manages, remove its resource from `dns.tf`
+and, in the same pull request, add one entry for it to
+`.github/dns-retirements.json`:
+
+```json
+{
+  "retire": [
+    {
+      "address": "cloudflare_dns_record.<name>",
+      "name": "<record name>",
+      "type": "MX",
+      "content": "<current content>"
+    }
+  ]
+}
+```
+
+`type` is one of `A`, `AAAA`, `CNAME`, `MX` and `TXT`. Both
+`scripts/assert-no-destructive-plan.sh` and `scripts/check-dns-plan.jq` admit
+the plan's delete only when its actions are exactly `delete`, the resource is a
+DNS record at the listed address, and its name (in full, lower-case form), type
+and content before the change equal the entry. The plan check also refuses a
+record that external-dns owns. A listed record is still never replaced, and
+nothing but a DNS record is ever deleted. The list holds at most 20 entries
+with unique addresses and nothing else; a malformed list refuses every run.
+Once the deletion is applied, remove its entry in a later change.
 
 ## Recovery
 

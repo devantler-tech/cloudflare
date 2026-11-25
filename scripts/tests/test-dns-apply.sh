@@ -89,7 +89,8 @@ result=$(create cloudflare_dns_record.lower devantler.tech txt '"apple-domain=x"
 jq -e --arg zone "$zone" '.refused==[] and .imports==[{address:"cloudflare_dns_record.lower",id:($zone+"/00000000000000000000000000000003")}]' <<<"$result" >/dev/null
 printf '%s\n' 'PASS: declared records import only from one exact unowned live record'
 
-# 3. Plan boundary: imports must be unchanged, nothing is deleted or replaced,
+# 3. Plan boundary: imports must be unchanged, nothing is replaced, nothing is
+# deleted while the retirement list is empty (3c covers listed retirements),
 # and an ownership record may only claim a record this plan stops managing.
 import_id="$zone/00000000000000000000000000000001"
 printf '[{"address":"cloudflare_dns_record.mail_mx_01","id":"%s"}]\n' "$import_id" > "$scratch/imports.json"
@@ -100,7 +101,9 @@ change() { jq -n --arg address "$1" --arg type "$2" --argjson actions "$3" --arg
   '{address:$address,mode:"managed",type:$type,change:({actions:$actions,before:$before,after:$after,after_unknown:{}} + (if $importing then {importing:$importing} else {} end))}'; }
 plan() { jq -s '{resource_changes:.}'; }
 printf '%s\n' '{"externalDnsHandover":[]}' > "$scratch/handover.json"
-check() { jq -e --slurpfile imports "$scratch/imports.json" --slurpfile snapshot "$scratch/snapshot.json" --slurpfile handover "$scratch/handover.json" -f "$root/scripts/check-dns-plan.jq" >/dev/null; }
+printf '%s\n' '{"retire":[]}' > "$scratch/retirements.json"
+check() { jq -e --slurpfile imports "$scratch/imports.json" --slurpfile snapshot "$scratch/snapshot.json" --slurpfile handover "$scratch/handover.json" \
+  --slurpfile retirements "$scratch/retirements.json" -f "$root/scripts/check-dns-plan.jq" >/dev/null; }
 noop_import=$(change cloudflare_dns_record.mail_mx_01 cloudflare_dns_record '["no-op"]' "$record" "$record" "{\"id\":\"$import_id\"}")
 zone_noop=$(change cloudflare_zone.primary cloudflare_zone '["no-op"]' '{}' '{}' null)
 dkim_kept=$(change cloudflare_dns_record.mail_dkim_sig1 cloudflare_dns_record '["no-op"]' "$dkim" "$dkim" null)
@@ -199,6 +202,80 @@ printf '%s\n' "[{\"address\":\"cloudflare_bot_management.primary\",\"id\":\"$zon
 printf '%s\n' "$bot_import" | reject "missing zone-setting import"
 printf '%s\n' "[{\"address\":\"cloudflare_dns_record.mail_mx_01\",\"id\":\"$import_id\"}]" > "$scratch/imports.json"
 printf '%s\n' 'PASS: zone settings are imported, may be updated, and never created, forgotten or widened'
+
+# 3c. A DNS record is deleted only as a reviewed retirement: a pure delete whose
+# address, name, type and content .github/dns-retirements.json names, of a
+# record external-dns does not own. Nothing else is ever deleted or replaced.
+mx02='{"name":"devantler.tech","type":"MX","content":"mx02.mail.icloud.com","ttl":3600}'
+retire_mx02=$(change cloudflare_dns_record.mail_mx_02 cloudflare_dns_record '["delete"]' "$mx02" null null)
+entry='{"address":"cloudflare_dns_record.mail_mx_02","name":"devantler.tech","type":"MX","content":"mx02.mail.icloud.com"}'
+listed() { jq -cn --argjson entry "$entry" "{retire:[\$entry | $1]}" > "$scratch/retirements.json"; }
+printf '%s\n' "$noop_import" "$retire_mx02" | reject "unlisted retirement"
+listed .
+printf '%s\n' "$noop_import" "$retire_mx02" | plan | check
+# The company Email cutover: mx01 moves in place and mx02 is retired.
+printf '%s\n' '[]' > "$scratch/imports.json"
+{ change cloudflare_dns_record.mail_mx_01 cloudflare_dns_record '["update"]' "$record" '{"name":"devantler.tech","type":"MX","content":"mail.devantler.tech","ttl":3600}' null
+  printf '%s\n' "$retire_mx02"; } | plan | check
+printf '%s\n' "[{\"address\":\"cloudflare_dns_record.mail_mx_01\",\"id\":\"$import_id\"}]" > "$scratch/imports.json"
+for name in Devantler.Tech. @; do
+  listed ".name=\"$name\""
+  printf '%s\n' "$noop_import" "$retire_mx02" | plan | check
+done
+for edit in '.content="mx01.mail.icloud.com"' '.name="www.devantler.tech"' '.type="TXT"' '.address="cloudflare_dns_record.mail_mx_03"'; do
+  listed "$edit"
+  printf '%s\n' "$noop_import" "$retire_mx02" | reject "retirement that differs from its entry ($edit)"
+done
+listed .
+for actions in '["delete","create"]' '["create","delete"]'; do
+  { printf '%s\n' "$noop_import"; change cloudflare_dns_record.mail_mx_02 cloudflare_dns_record "$actions" "$mx02" "$mx02" null; } | reject "listed replacement $actions"
+done
+{ printf '%s\n' "$noop_import"; change cloudflare_dns_record.mail_mx_02 cloudflare_dns_record '["delete"]' null null null; } | reject "retirement without its prior record"
+{ printf '%s\n' "$noop_import"; change cloudflare_dns_record.mail_mx_02 cloudflare_zone '["delete"]' "$mx02" null null; } | reject "listed address of a resource that is not a DNS record"
+{ printf '%s\n' "$noop_import"; change cloudflare_zone.primary cloudflare_zone '["delete"]' '{"name":"devantler.tech"}' null null; } | reject "zone delete"
+{ printf '%s\n' "$noop_import"; change 'cloudflare_r2_bucket.buckets["state"]' cloudflare_r2_bucket '["delete"]' '{"name":"state"}' null null; } | reject "bucket delete"
+{ printf '%s\n' "$noop_import"; change cloudflare_zone_setting.nel cloudflare_zone_setting '["delete"]' '{"setting_id":"nel","value":"on"}' null null; } | reject "zone setting delete"
+# A listed record that external-dns owns is never deleted here; one it does not own is.
+printf '%s\n' '{"retire":[{"address":"cloudflare_dns_record.www","name":"www.devantler.tech","type":"CNAME","content":"pages.example.test"},
+  {"address":"cloudflare_dns_record.portal","name":"portal.devantler.tech","type":"A","content":"192.0.2.1"}]}' > "$scratch/retirements.json"
+{ printf '%s\n' "$noop_import"; change cloudflare_dns_record.www cloudflare_dns_record '["delete"]' "$www" null null; } | plan | check
+{ printf '%s\n' "$noop_import"; change cloudflare_dns_record.portal cloudflare_dns_record '["delete"]' '{"name":"portal.devantler.tech","type":"A","content":"192.0.2.1"}' null null; } | reject "retirement of an external-dns record"
+# A malformed list refuses every plan, like the handover list.
+reject_list() {
+  if printf '%s\n' "$noop_import" | plan | check 2> "$scratch/list-error"; then printf 'FAIL: retirement list %s was admitted\n' "$1" >&2; exit 1; fi
+  grep -Fq 'dns-retirements: invalid list' "$scratch/list-error"
+}
+twenty=$(jq -cn --argjson entry "$entry" '{retire:([$entry] + [range(19)|{address:"cloudflare_dns_record.r\(.)",name:"r\(.).devantler.tech",type:"TXT",content:"x"}])}')
+printf '%s\n' "$twenty" > "$scratch/retirements.json"
+printf '%s\n' "$noop_import" "$retire_mx02" | plan | check
+twenty_one=$(jq -c '.retire += [{address:"cloudflare_dns_record.r19",name:"r19.devantler.tech",type:"TXT",content:"x"}]' <<<"$twenty")
+for list in "$twenty_one" '{"retire":[{"address":"cloudflare_dns_record.a","name":"devantler.tech","type":"mx","content":"x"}]}' \
+  '{"retire":[{"address":"cloudflare_dns_record.a","name":"devantler.tech","type":"SRV","content":"x"}]}' \
+  '{"retire":[{"address":"cloudflare_dns_record.a","name":"devantler.tech","type":"MX","content":""}]}' \
+  '{"retire":[{"address":"cloudflare_dns_record.a","name":"devantler.tech","type":"MX","content":10}]}' \
+  '{"retire":[{"address":"cloudflare_dns_record.a","name":"devantler.tech","type":"MX"}]}' \
+  '{"retire":[{"address":"cloudflare_dns_record.a","name":"devantler.tech","type":"MX","content":"x","extra":1}]}' \
+  '{"retire":[{"address":"cloudflare_zone.primary","name":"devantler.tech","type":"MX","content":"x"}]}' \
+  '{"retire":[{"address":"cloudflare_dns_record.records[\"x\"]","name":"devantler.tech","type":"MX","content":"x"}]}' \
+  '{"retire":[{"address":"cloudflare_dns_record.a","name":"devantler tech","type":"MX","content":"x"}]}' \
+  '{"retire":[{"address":"cloudflare_dns_record.a","name":"","type":"MX","content":"x"}]}' \
+  '{"retire":[{"address":"cloudflare_dns_record.a","name":"a.devantler.tech","type":"A","content":"x"},{"address":"cloudflare_dns_record.a","name":"b.devantler.tech","type":"A","content":"y"}]}' \
+  '{"retire":["cloudflare_dns_record.a"]}' '{"retire":{}}' '{"retire":[],"extra":1}' '{"other":[]}' '[]' '{"retire":[]} {"retire":[]}'; do
+  printf '%s\n' "$list" > "$scratch/retirements.json"
+  reject_list "$list"
+done
+printf '%s\n' 'not json' > "$scratch/retirements.json"
+if printf '%s\n' "$noop_import" | plan | check 2>/dev/null; then printf 'FAIL: unparsable retirement list was admitted\n' >&2; exit 1; fi
+# The repository's own list is valid, so a typo in it cannot stop every DNS run,
+# and the apply passes it to both guards.
+cp "$root/.github/dns-retirements.json" "$scratch/retirements.json"
+printf '%s\n' "$noop_import" | plan | check
+# shellcheck disable=SC2016 # The patterns are literal apply-dns.sh text.
+{ grep -Fq 'retirements="$root/.github/dns-retirements.json"' "$root/scripts/apply-dns.sh"
+  grep -Fq 'assert-no-destructive-plan.sh" "$scratch/evidence/change.json" "$retirements"' "$root/scripts/apply-dns.sh"
+  grep -Fq -- '--slurpfile retirements "$retirements"' "$root/scripts/apply-dns.sh"; }
+printf '%s\n' '{"retire":[]}' > "$scratch/retirements.json"
+printf '%s\n' 'PASS: DNS records are deleted only as reviewed retirements, never replaced'
 
 # 4. The declared mail records are the ones the company Email depends on.
 grep -q 'content  = "mx01.mail.icloud.com"' "$root/dns.tf"

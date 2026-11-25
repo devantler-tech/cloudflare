@@ -68,9 +68,10 @@ The run creates a `.terraform/` directory in the repository, which Git ignores
 and which you can delete, and a few `cloudflare-plan-*.out` files in `/tmp`.
 
 This check never contacts the Cloudflare API and never reads state. It shows
-that the configuration is well-formed and that the guard rejects deletes and
-replacements. It does not show what a plan against the live account would
-change. Do not set `CLOUDFLARE_API_TOKEN` or backend credentials to run it.
+that the configuration is well-formed and that the guard rejects replacements
+and every delete that the reviewed retirement list does not name. It does not
+show what a plan against the live account would change. Do not set
+`CLOUDFLARE_API_TOKEN` or backend credentials to run it.
 
 [CI](.github/workflows/ci.yaml) runs the same script on every pull request
 and on every push to `main`, on a GitHub-hosted runner with no production credentials.
@@ -91,8 +92,11 @@ DNS records are declared in [`dns.tf`](dns.tf), and the zone settings that would
 rewrite proxied pages in [`zone.tf`](zone.tf). Both change only through the
 manual **DNS plan and guarded apply** workflow: plan first, then apply the same
 reviewed revision. It imports declared records that already exist, never
-deletes or replaces anything, and keeps an encrypted state copy from before and
-after every apply. Other resources still have no general apply path.
+replaces anything, and keeps an encrypted state copy from before and after
+every apply. It deletes a DNS record only when
+[`.github/dns-retirements.json`](.github/dns-retirements.json) names it: one
+reviewed entry per record, removed again once the deletion is applied. Other
+resources still have no general apply path.
 
 The ownership decision and dependency boundary are recorded in
 [`docs/adr/0001-cluster-independent-cloudflare-owner.md`](docs/adr/0001-cluster-independent-cloudflare-owner.md).
