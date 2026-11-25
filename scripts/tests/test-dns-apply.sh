@@ -277,8 +277,10 @@ printf '%s\n' "$noop_import" | plan | check
 printf '%s\n' '{"retire":[]}' > "$scratch/retirements.json"
 printf '%s\n' 'PASS: DNS records are deleted only as reviewed retirements, never replaced'
 
-# 4. The declared mail records are the ones the company Email depends on.
-grep -q 'content  = "mx01.mail.icloud.com"' "$root/dns.tf"
-grep -q 'content  = "mx02.mail.icloud.com"' "$root/dns.tf"
+# 4. The declared mail records are the ones the company Email depends on: the
+# domain's mail goes to the platform's mail server alone (platform#5481).
+grep -q 'content  = "mail.devantler.tech"' "$root/dns.tf"
+if grep -q 'content  = "[^"]*mail\.icloud\.com"' "$root/dns.tf"; then exit 1; fi
+jq -e '.retire == [{"address":"cloudflare_dns_record.mail_mx_02","name":"devantler.tech","type":"MX","content":"mx02.mail.icloud.com"}]' "$root/.github/dns-retirements.json" >/dev/null
 if grep -q '"_externaldns.devantler.tech"' "$root/dns.tf"; then exit 1; fi
 printf '%s\n' 'PASS: declared DNS keeps the Email records and never the typeless apex registry'
