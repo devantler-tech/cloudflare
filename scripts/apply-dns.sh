@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Reviewed DNS changes against the authoritative R2 state. The change phase
-# imports declared records that already exist, refuses deletes, replacements
-# and changing imports, and in apply mode captures encrypted state before and
+# imports declared records that already exist, refuses replacements, changing
+# imports and every delete that .github/dns-retirements.json does not name,
+# and in apply mode captures encrypted state before and
 # after the apply. The recover phase plans from a fresh runner and must find
 # nothing to do. Only fixed verdict lines reach the log; values stay encrypted.
 set +x
@@ -214,8 +215,14 @@ stage=boundary
 handover="$root/.github/dns-handover.json"
 [[ -f $handover && ! -L $handover && $(wc -c < "$handover") -le 65536 ]] || stop
 state_unique_json "$handover" || stop
-bash "$root/scripts/assert-no-destructive-plan.sh" "$scratch/evidence/change.json" > "$scratch/evidence/destructive.log" 2>&1 || stop
-jq -e --slurpfile imports "$scratch/evidence/imports.json" --slurpfile snapshot "$scratch/evidence/snapshot.json" --slurpfile handover "$handover" -f "$root/scripts/check-dns-plan.jq" "$scratch/evidence/change.json" >/dev/null 2>&1 || stop
+# The reviewed list of DNS records this change may delete: one entry per
+# record, by address, name, type and content. Every other delete is refused.
+retirements="$root/.github/dns-retirements.json"
+[[ -f $retirements && ! -L $retirements && $(wc -c < "$retirements") -le 65536 ]] || stop
+state_unique_json "$retirements" || stop
+bash "$root/scripts/assert-no-destructive-plan.sh" "$scratch/evidence/change.json" "$retirements" > "$scratch/evidence/destructive.log" 2>&1 || stop
+jq -e --slurpfile imports "$scratch/evidence/imports.json" --slurpfile snapshot "$scratch/evidence/snapshot.json" --slurpfile handover "$handover" \
+  --slurpfile retirements "$retirements" -f "$root/scripts/check-dns-plan.jq" "$scratch/evidence/change.json" >/dev/null 2>&1 || stop
 if [[ $DNS_MODE == plan ]]; then unset root_token; exit 0; fi
 stage=before-capture
 capture before || stop

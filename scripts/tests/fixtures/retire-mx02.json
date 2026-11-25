@@ -1,0 +1,25 @@
+{
+  "format_version": "1.2",
+  "resource_changes": [
+    {
+      "address": "cloudflare_dns_record.mail_mx_01",
+      "mode": "managed",
+      "type": "cloudflare_dns_record",
+      "change": {
+        "actions": ["update"],
+        "before": { "name": "devantler.tech", "type": "MX", "content": "mx01.mail.icloud.com", "priority": 10 },
+        "after": { "name": "devantler.tech", "type": "MX", "content": "mail.devantler.tech", "priority": 10 }
+      }
+    },
+    {
+      "address": "cloudflare_dns_record.mail_mx_02",
+      "mode": "managed",
+      "type": "cloudflare_dns_record",
+      "change": {
+        "actions": ["delete"],
+        "before": { "name": "devantler.tech", "type": "MX", "content": "mx02.mail.icloud.com", "priority": 10 },
+        "after": null
+      }
+    }
+  ]
+}

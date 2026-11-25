@@ -1,7 +1,11 @@
 # Input: the saved plan JSON. $imports[0]: the resolved import list.
 # $snapshot[0]: the live zone. Names are compared in their full, lower-case
 # form, so a relative or differently written name cannot slip by.
-# Only DNS records may change. Nothing is deleted or replaced. Every import is
+# Only DNS records may change, and nothing is replaced. A DNS record is deleted
+# only as a reviewed retirement: a pure delete of a record external-dns does
+# not own, whose address the reviewed $retirements[0] list
+# (.github/dns-retirements.json) names together with the record's name, type
+# and content before the change. Nothing else is ever deleted. Every import is
 # known and leaves its record exactly as it is. A created or updated record
 # has a known name and an upper-case type, and external-dns owns it neither
 # before nor after the change. Its name uses only hostname characters. An
@@ -35,12 +39,31 @@ def claims:
   [$rest|capture("^(?<type>[a-z0-9]+)-(?<name>.+)$")|{name, type}];
 def hits($claim): (.name|fqdn)==$claim.name and ($claim.type==null or (.type|ascii_downcase)==$claim.type);
 def writes: .change.actions==["create"] or .change.actions==["update"];
+# $retire: the validated retirement entries, names in their full form.
+def retired($retire; $live):
+  .change.before as $before | .address as $address |
+  .change.actions==["delete"] and .type=="cloudflare_dns_record" and
+  ($before|type=="object") and ($before.name|type=="string") and
+  ($before.type|type=="string") and ($before.content|type=="string") and
+  any($retire[]; .address==$address and .name==($before.name|fqdn) and
+    .type==($before.type|ascii_upcase) and .content==$before.content) and
+  ($before|owned($live)|not);
 . as $plan | $imports[0] as $wanted | $snapshot[0].records as $live |
 ($handover[0] | if type=="object" and keys==["externalDnsHandover"] and (.externalDnsHandover|type=="array" and length<=20) and
    all(.externalDnsHandover[]; type=="object" and keys==["name","type"] and (.type|IN("A","AAAA","CNAME")) and
      (.name|type=="string" and test("\\A[A-Za-z0-9.-]+\\z")))
  then [.externalDnsHandover[] | {name:(.name|fqdn), type:(.type|ascii_downcase)}]
  else error("dns-handover: invalid list") end) as $listed |
+($retirements | if length==1 and (.[0] | type=="object" and keys==["retire"] and
+     (.retire | type=="array" and length<=20 and
+       all(.[]; type=="object" and keys==["address","content","name","type"] and
+         (.address|type=="string" and test("\\Acloudflare_dns_record\\.[A-Za-z_][A-Za-z0-9_-]*\\z")) and
+         (.name|type=="string" and test("\\A[A-Za-z0-9_.*@-]+\\z")) and
+         (.type|IN("A","AAAA","CNAME","MX","TXT")) and
+         (.content|type=="string" and length>0)) and
+       (map(.address)|length)==(map(.address)|unique|length)))
+ then [.[0].retire[] | .name |= fqdn]
+ else error("dns-retirements: invalid list") end) as $retire |
 [.resource_changes[] | select(.type=="cloudflare_dns_record" and .change.actions!=["forget"]) |
   .change.after // .change.before | select(type=="object") |
   {name:(.name // "" | fqdn), type:(.type // "" | ascii_downcase)}] as $kept |
@@ -57,7 +80,7 @@ all($wanted[];
 all(.resource_changes[];
   . as $resource |
   .mode=="managed" and
-  (.change.actions|IN(["no-op"],["create"],["update"],["forget"])) and
+  (.change.actions|IN(["no-op"],["create"],["update"],["forget"],["delete"])) and
   (if .change.importing then
      any($wanted[]; .address==$resource.address) and
      (if setting then .change.actions|IN(["no-op"],["update"]) else .change.actions==["no-op"] and (changed|not) end)
@@ -81,4 +104,5 @@ all(.resource_changes[];
         all($claims[]; . as $claim |
           all($kept[]; .name!=$claim.name or ($claim.type!=null and .type!=$claim.type)))
       else ($after|owned($live)|not) end)
+   elif .change.actions==["delete"] then retired($retire; $live)
    else true end))

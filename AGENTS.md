@@ -43,6 +43,13 @@ the clean and disposable failure fixtures locally.
   replace a DNS record only after the import migration is complete; zone or
   bucket destruction requires a separate, explicit change to that lifecycle
   boundary.
+- The guarded DNS apply deletes a DNS record only through
+  `.github/dns-retirements.json`: one reviewed entry per record, naming its
+  `address`, `name`, `type` and current `content`, in the change that removes
+  the record from `dns.tf`. `scripts/assert-no-destructive-plan.sh` and
+  `scripts/check-dns-plan.jq` admit only a pure delete that matches its entry;
+  replacements, unlisted deletes and deletes of anything but a DNS record stay
+  refused. Remove an entry once its deletion is applied.
 - Run `scripts/test.sh` before every PR.
 - The confirmed main-only state-bootstrap workflow is a programmed data writer.
   It owns `recovery/cloudflare-state-<run>` branches and immutable
