@@ -32,10 +32,11 @@ variable "dns_records" {
 variable "r2_buckets" {
   description = "R2 buckets keyed by their immutable bucket name."
   type = map(object({
-    jurisdiction        = optional(string, "default")
-    location            = optional(string)
-    storage_class       = optional(string, "Standard")
-    retention_lock_days = optional(number)
+    jurisdiction            = optional(string, "default")
+    location                = optional(string)
+    storage_class           = optional(string, "Standard")
+    retention_lock_days     = optional(number)
+    account_removal_journal = optional(bool, false)
   }))
   default = {}
 
@@ -45,8 +46,18 @@ variable "r2_buckets" {
       bucket.retention_lock_days == null ? true : (
         bucket.retention_lock_days >= 90 && floor(bucket.retention_lock_days) == bucket.retention_lock_days
       )
+      if !bucket.account_removal_journal
     ])
     error_message = "An archive retention lock requires a whole number of days, with a minimum of 90."
+  }
+
+  validation {
+    condition = alltrue([
+      for bucket in values(var.r2_buckets) :
+      bucket.jurisdiction == "eu" && bucket.retention_lock_days == 30
+      if bucket.account_removal_journal
+    ])
+    error_message = "An account removal journal requires EU storage and a 30-day retention lock."
   }
 
   # These are the lock jurisdictions accepted by the pinned Cloudflare provider.
@@ -70,6 +81,16 @@ variable "r2_lifecycle_rules" {
     transition_to_infrequent_access_after_days = optional(number)
   })))
   default = {}
+
+  validation {
+    condition = alltrue([
+      for bucket, rules in var.r2_lifecycle_rules : alltrue([
+        for rule in rules : !rule.enabled || rule.delete_objects_after_days == null
+      ])
+      if try(var.r2_buckets[bucket].account_removal_journal, false)
+    ])
+    error_message = "An account removal journal requires controlled cleanup and cannot use automatic object expiration."
+  }
 }
 
 variable "account_tokens" {
