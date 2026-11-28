@@ -59,23 +59,17 @@ resource "cloudflare_dns_record" "ksail_docs" {
   settings = { flatten_cname = false }
 }
 
-# Company Email (iCloud). These must not change while the mail transport moves.
+# Company Email is delivered to the platform's own mail server
+# (devantler-tech/platform#5481); mail.devantler.tech is published by the
+# platform. The former second iCloud MX record is retired through
+# .github/dns-retirements.json. Rollback: revert this change, which points this
+# record back to mx01.mail.icloud.com and recreates mx02.mail.icloud.com. The
+# iCloud SPF include and DKIM record below stay until iCloud is retired.
 resource "cloudflare_dns_record" "mail_mx_01" {
   zone_id  = cloudflare_zone.primary.id
   name     = "devantler.tech"
   type     = "MX"
-  content  = "mx01.mail.icloud.com"
-  priority = 10
-  ttl      = 3600
-  proxied  = false
-  settings = {}
-}
-
-resource "cloudflare_dns_record" "mail_mx_02" {
-  zone_id  = cloudflare_zone.primary.id
-  name     = "devantler.tech"
-  type     = "MX"
-  content  = "mx02.mail.icloud.com"
+  content  = "mail.devantler.tech"
   priority = 10
   ttl      = 3600
   proxied  = false

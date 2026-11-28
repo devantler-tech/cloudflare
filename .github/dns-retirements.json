@@ -1,3 +1,10 @@
 {
-  "retire": []
+  "retire": [
+    {
+      "address": "cloudflare_dns_record.mail_mx_02",
+      "name": "devantler.tech",
+      "type": "MX",
+      "content": "mx02.mail.icloud.com"
+    }
+  ]
 }
