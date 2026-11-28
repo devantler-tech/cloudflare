@@ -23,6 +23,14 @@ can read it, check it locally and propose changes without any Cloudflare
 access. Privileged changes use the confirmed main-only bootstrap workflow;
 these local checks grant no deployment access (see [Safety state](#safety-state)).
 
+## Account removal journals
+
+Set `account_removal_journal = true` for a dedicated EU bucket with a 30-day
+retention lock. The journal preserves portal account-removal evidence during
+the supported backup window. Recovery controls determine when account records
+can be cleaned up. The journal accepts rules for abandoned uploads and rejects
+automatic object expiration.
+
 ## Check the configuration locally
 
 This is the first thing to run, and it needs no credentials, no Cloudflare

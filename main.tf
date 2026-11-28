@@ -50,7 +50,7 @@ resource "cloudflare_r2_bucket_lock" "retention" {
   bucket_name  = cloudflare_r2_bucket.buckets[each.key].name
   jurisdiction = cloudflare_r2_bucket.buckets[each.key].jurisdiction
   rules = [{
-    id      = "archive-retention"
+    id      = each.value.account_removal_journal ? "account-removal-retention" : "archive-retention"
     enabled = true
     prefix  = ""
     condition = {
